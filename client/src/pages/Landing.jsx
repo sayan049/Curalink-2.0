@@ -491,7 +491,7 @@ const Landing = () => {
               { end: 10, suffix: 'M+', label: 'Research Papers', icon: BookOpen },
               { end: 500, suffix: 'K+', label: 'Clinical Trials', icon: FlaskConical },
               { end: 400, suffix: '+', label: 'Papers Per Query', icon: Layers },
-              { end: 40, suffix: 's', label: 'Avg Response', icon: Zap },
+              { end: 10, suffix: 's', label: 'Avg Response', icon: Zap },
             ].map((stat, idx) => (
               <motion.div
                 key={stat.label}

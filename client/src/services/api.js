@@ -10,7 +10,7 @@ const api = axios.create({
   },
 });
 
-// Request interceptor
+// ── Request interceptor ───────────────────────────────────────────────────────
 api.interceptors.request.use(
   (config) => {
     const token = useAuthStore.getState().token;
@@ -19,19 +19,40 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor
+// ── Response interceptor ──────────────────────────────────────────────────────
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const url    = error.config?.url || '';
+
+    // ✅ KEY FIX:
+    // Only force-logout + redirect on 401 when the user is ALREADY logged in
+    // (i.e. has a valid token in store) AND the request is NOT a login/auth attempt.
+    //
+    // Without this check, a failed login (also returns 401) triggers a page
+    // reload BEFORE the LoginForm catch block can show the error message.
+
+    const isAuthAttempt =
+      url.includes('/auth/login')      ||
+      url.includes('/auth/register')   ||
+      url.includes('/auth/verify')     ||
+      url.includes('/auth/forgot')     ||
+      url.includes('/auth/reset');
+
+    const isLoggedIn = !!useAuthStore.getState().token;
+
+    if (status === 401 && isLoggedIn && !isAuthAttempt) {
+      // Session expired or token revoked → logout and redirect
       useAuthStore.getState().logout();
       window.location.href = '/auth';
     }
+
+    // For all other errors (including failed login) → let the
+    // component's catch block handle it and show the error message
     return Promise.reject(error);
   }
 );

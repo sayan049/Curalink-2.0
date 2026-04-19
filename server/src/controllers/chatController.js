@@ -5,9 +5,9 @@ import hybridSearchService from "../services/research/hybridSearchService.js";
 import llmService from "../services/ai/llmService.js";
 import contextManager from "../services/context/contextManager.js";
 
-// ============================================================
+
 // SANITIZATION HELPERS
-// ============================================================
+
 
 const sanitizeString = (val) => {
   if (!val) return "";
@@ -54,7 +54,7 @@ const normalizeScores = (items, maxScore = 100) => {
   }));
 };
 
-// ── Remove LLM placeholder text ──────────────────────────────────────────────
+// ── Remove LLM placeholder text
 const PLACEHOLDER_PATTERNS = [
   "specific finding",
   "drug/treatment name",
@@ -80,7 +80,7 @@ const removePlaceholders = (arr) => {
   });
 };
 
-// ── Remove cross-disease contamination ───────────────────────────────────────
+// ── Remove cross-disease contamination 
 const DISEASE_KEYWORDS = {
   diabetes: [
     "hba1c",
@@ -189,9 +189,9 @@ const buildSourceSnippets = (publications = []) =>
       : "No abstract available",
   }));
 
-// ============================================================
+
 // DISEASE LIST
-// ============================================================
+
 
 const DISEASE_LIST = [
   // Specific cancers first
@@ -366,9 +366,9 @@ const DISEASE_LIST = [
   },
 ];
 
-// ============================================================
+
 // KNOWN DRUGS
-// ============================================================
+
 
 const KNOWN_DRUGS = new Set([
   // Oncology
@@ -469,9 +469,9 @@ const extractDrugFromQuery = (query) => {
   return null;
 };
 
-// ============================================================
+
 // QUERY TYPE HELPERS
-// ============================================================
+
 
 /**
  * Detects if the query is completely off-topic (not medical).
@@ -480,7 +480,7 @@ const isOffTopicQuery = (query) => {
   if (!query || typeof query !== "string") return false;
   const lower = query.toLowerCase().trim();
 
-  // ── Greetings and very short non-medical messages ─────────────────────
+  // ── Greetings and very short non-medical messages
   const GREETING_PATTERNS = [
     "hi",
     "hello",
@@ -648,7 +648,7 @@ const isOffTopicQuery = (query) => {
 
   if (isGreatPattern && !hasMedicalSignal) return true;
 
-  // ── Very short messages with no medical terms ─────────────────────────
+  // ── Very short messages with no medical terms 
   // Catches: "hi there", "hello world", "yo", "hey buddy", etc.
   if (tokens.length <= 3 && !hasMedicalSignal) {
     // Check if ANY token is a medical-adjacent word
@@ -709,8 +709,20 @@ const requiresDiseaseContext = (query) => {
     "available near",
     // Generic action queries
     "can i take",
-    "is it safe",
+    "can i use",        // ✅ ADD THIS
+    "can i eat",        // ✅ ADD THIS
+    "can i drink",      // ✅ ADD THIS
+    "can i have",       // ✅ ADD THIS
     "should i take",
+    "should i use",     // ✅ ADD THIS
+    "should i eat",     // ✅ ADD THIS
+    "should i avoid",
+    "is it safe",
+    "is it okay",       // ✅ ADD THIS
+    "is it good",       // ✅ ADD THIS
+    "is it bad",        // ✅ ADD THIS
+    "safe to take",     // ✅ ADD THIS
+    "safe to use",      // ✅ ADD THIS
     "latest treatment",
     "new treatment",
     "best treatment",
@@ -826,6 +838,8 @@ const isLifestyleQuery = (query) => {
     "can i drink",
     "can i have",
     "should i take",
+    "can i smoke",
+    "can i use",
     "should i eat",
     "should i avoid",
     "is it safe",
@@ -1015,9 +1029,9 @@ const extractResponseEntities = (structuredResponse) => {
   return [...new Set(entities)].slice(0, 10);
 };
 
-// ============================================================
+
 // SHARED HELPER: save system message + update metadata + respond
-// ============================================================
+
 
 const sendSystemMessage = async ({
   res,
@@ -1104,9 +1118,9 @@ export const createConversation = async (req, res, next) => {
   }
 };
 
-// ============================================================
+
 // GET CONVERSATIONS (list)
-// ============================================================
+
 
 export const getConversations = async (req, res, next) => {
   try {
@@ -1129,9 +1143,9 @@ export const getConversations = async (req, res, next) => {
   }
 };
 
-// ============================================================
+
 // GET SINGLE CONVERSATION + MESSAGES
-// ============================================================
+
 
 export const getConversation = async (req, res, next) => {
   try {
@@ -1157,9 +1171,9 @@ export const getConversation = async (req, res, next) => {
   }
 };
 
-// ============================================================
+
 // SEND MESSAGE — MAIN LOGIC
-// ============================================================
+
 
 export const sendMessage = async (req, res, next) => {
   try {
@@ -1167,7 +1181,7 @@ export const sendMessage = async (req, res, next) => {
     const conversationId = req.params.id;
     const startTime = Date.now();
 
-    // ── 0. Validate input ──────────────────────────────────────────────────
+    // ── 0. Validate input 
     if (!content || typeof content !== "string" || !content.trim()) {
       return res
         .status(400)
@@ -1236,7 +1250,7 @@ export const sendMessage = async (req, res, next) => {
     console.log(`   Procedure:            ${isProcedure}`);
     console.log(`   Off-topic:            ${isOffTopic}`);
 
-    // ── ✅ OFF-TOPIC GUARD ─────────────────────────────────────────────────
+    // ── ✅ OFF-TOPIC GUARD 
     if (isOffTopic) {
       console.log("🚫 Off-topic query detected — returning polite redirect");
 
@@ -1282,7 +1296,7 @@ export const sendMessage = async (req, res, next) => {
       });
     }
 
-    // ── 5. Detect disease + topic switch ───────────────────────────────────
+    // ── 5. Detect disease + topic switch
     const currentDisease = conversation.context?.disease || null;
     const newDiseaseDetected = detectNewDisease(trimmedContent, currentDisease);
     let isTopicSwitch = false;
@@ -1320,7 +1334,7 @@ export const sendMessage = async (req, res, next) => {
       }
     }
 
-    // ── 6. Extract entities into context ──────────────────────────────────
+    // ── 6. Extract entities into context
     try {
       await contextManager.extractAndUpdateContext(
         req.user.id,
@@ -1334,7 +1348,7 @@ export const sendMessage = async (req, res, next) => {
     const context =
       (await contextManager.getContext(req.user.id, conversationId)) || {};
 
-    // ── 7. Resolve effective disease + location ────────────────────────────
+    // ── 7. Resolve effective disease + location
     const effectiveDisease =
       newDiseaseDetected ||
       conversation.context?.disease ||
@@ -1379,7 +1393,7 @@ export const sendMessage = async (req, res, next) => {
       console.log("⚠️  No location set — trials will be returned globally");
     }
 
-    // ── ✅ DISEASE CONTEXT GATE ────────────────────────────────────────────
+    // ── ✅ DISEASE CONTEXT GATE 
     // If no disease found AND query requires disease to be useful,
     // ask user to specify before running any search.
     if (!effectiveDisease && requiresDiseaseContext(trimmedContent)) {
@@ -1434,7 +1448,7 @@ export const sendMessage = async (req, res, next) => {
       });
     }
 
-    // ── 8. Count messages + determine follow-up ────────────────────────────
+    // ── 8. Count messages + determine follow-up
     let existingMsgCount = 0;
     try {
       existingMsgCount = await Message.countDocuments({
@@ -1546,7 +1560,7 @@ export const sendMessage = async (req, res, next) => {
       console.log(`\n💊 Drug-only query (no disease): "${searchQuery}"`);
     }
 
-    // ── 10. Build enhanced context ─────────────────────────────────────────
+    // ── 10. Build enhanced context 
     const enhancedContext = {
       ...(isTopicSwitch ? {} : context),
       disease: effectiveDisease,
@@ -1637,7 +1651,7 @@ export const sendMessage = async (req, res, next) => {
       `📜 History: ${conversationHistory.length} msgs (limit: ${historyLimit})`,
     );
 
-    // ── 13. Generate AI response ───────────────────────────────────────────
+    // ── 13. Generate AI response 
 
     // ✅ HARD BLOCK — No papers AND no trials found — skip LLM entirely
     // Prevents hallucination when search returns nothing
@@ -1873,9 +1887,9 @@ export const sendMessage = async (req, res, next) => {
   }
 };
 
-// ============================================================
+
 // DELETE CONVERSATION
-// ============================================================
+
 
 export const deleteConversation = async (req, res, next) => {
   try {

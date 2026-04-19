@@ -9,9 +9,9 @@ class LLMService {
     this.client = ollamaConfig.getClient();
   }
 
-  // ============================================================
+
   // CORE: Generate text completion
-  // ============================================================
+
   async generate(prompt, options = {}) {
     try {
       const response = await this.client.chat.completions.create({
@@ -32,9 +32,9 @@ class LLMService {
       throw new Error("LLM generate failed");
     }
   }
-  // ============================================================
+
   // CORE: Chat completion (multi-turn)
-  // ============================================================
+
   async chat(messages, options = {}) {
     try {
       const response = await this.client.chat.completions.create({
@@ -59,27 +59,27 @@ class LLMService {
     }
   }
 
-  // ============================================================
+
   // BUILD SYSTEM PROMPT - Strict, disease-focused
-  // ============================================================
+
   buildSystemPrompt(context, userProfile = {}, isResearcherQuery = false) {
     const disease = context?.disease || "the medical condition";
     const location = context?.location || userProfile?.location || null;
     const isLifestyleQuery = context?.isLifestyleQuery || false;
     const originalQuery = context?.originalQuery || "";
 
-    // ── Previous response entities for referent resolution ───────────────────
+    // ── Previous response entities for referent resolution 
     const prevEntities =
       Array.isArray(context?.responseEntities) &&
       context.responseEntities.length > 0
         ? context.responseEntities
         : [];
 
-    // ── Global fallback trial flags ───────────────────────────────────────────
+    // ── Global fallback trial flags 
     const noLocalTrials = context?.noLocalTrials || false;
     const fallbackCount = context?.fallbackTrialCount || 0;
 
-    // ── Build base prompt ─────────────────────────────────────────────────────
+    // ── Build base prompt 
     let prompt = `You are Curalink, a medical AI research assistant.
 
 ABSOLUTE RULES - NEVER VIOLATE:
@@ -110,7 +110,7 @@ IMPORTANT INSTRUCTIONS FOR THIS QUERY:
 - Do NOT cite papers about chemotherapy/immunotherapy as evidence about food safety`;
     }
 
-    // ── Low result count honesty ──────────────────────────────────────────
+    // ── Low result count honesty
 if (context?.lowResultCount) {
   prompt += `
 
@@ -123,7 +123,7 @@ if (context?.lowResultCount) {
 - Never invent statistics, drug names, or outcomes not present in the provided abstracts`;
 }
 
-    // ── Location context ──────────────────────────────────────────────────────
+    // ── Location context 
     if (location) {
       if (noLocalTrials && fallbackCount > 0) {
         // ✅ No local trials found — global fallback is being shown
@@ -156,7 +156,7 @@ Mention specific cities/regions when available.`;
       }
     }
 
-    // ── Researcher query flag ─────────────────────────────────────────────────
+    // ── Researcher query flag
     if (isResearcherQuery) {
       prompt += `
 
@@ -167,7 +167,7 @@ RESEARCHER QUERY MODE:
 - Focus on who discovered/developed/pioneered what, not generic disease facts`;
     }
 
-    // ── Previous response entities for referent resolution ───────────────────
+    // ── Previous response entities for referent resolution
     if (prevEntities.length > 0) {
       prompt += `
 
@@ -176,7 +176,7 @@ PREVIOUS RESPONSE MENTIONED: ${prevEntities.join(", ")}
 these are the likely referents from the previous answer)`;
     }
 
-    // ── Recent conversation topics ────────────────────────────────────────────
+    // ── Recent conversation topics 
     if (
       Array.isArray(context?.previousQueries) &&
       context.previousQueries.length > 0
@@ -231,9 +231,9 @@ RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
     return prompt;
   }
 
-  // ============================================================
+
   // BUILD USER PROMPT - Rich but concise
-  // ============================================================
+  
   buildUserPrompt(
     query,
     publications = [],
@@ -298,9 +298,9 @@ URL: ${trial.url || ""}
     return prompt;
   }
 
-  // ============================================================
+  
   // BUILD CHAT MESSAGES - Zero history pollution
-  // ============================================================
+
   buildChatMessages(systemPrompt, conversationHistory = [], userPrompt) {
     const messages = [{ role: "system", content: systemPrompt }];
 
@@ -320,9 +320,9 @@ URL: ${trial.url || ""}
     return messages;
   }
 
-  // ============================================================
+  
   // MAIN: Generate medical response
-  // ============================================================
+
   async generateMedicalResponse(
     query,
     context = {},
@@ -401,9 +401,9 @@ URL: ${trial.url || ""}
     }
   }
 
-  // ============================================================
+  
   // PARSE: Extract structured response from LLM output
-  // ============================================================
+  
   parseStructuredResponse(text, query, publications = [], clinicalTrials = []) {
     if (!text || typeof text !== "string") {
       return this.buildFallbackStructuredResponse(
@@ -472,9 +472,9 @@ URL: ${trial.url || ""}
     }
   }
 
-  // ============================================================
+  
   // HELPERS: Type safety
-  // ============================================================
+
   ensureString(value) {
     if (!value) return "";
     if (typeof value === "string") return value;
@@ -533,9 +533,9 @@ URL: ${trial.url || ""}
     }));
   }
 
-  // ============================================================
+  
   // FALLBACK: When LLM fails or returns bad data
-  // ============================================================
+ 
   buildFallbackStructuredResponse(
     rawText,
     query,
@@ -631,9 +631,9 @@ URL: ${trial.url || ""}
     return { structuredResponse: structured, rawText, tokensUsed: 0 };
   }
 
-  // ============================================================
+ 
   // ENTITY EXTRACTION
-  // ============================================================
+  
   async extractEntities(text) {
     if (!text || typeof text !== "string") {
       return {
@@ -686,9 +686,9 @@ Only include entities explicitly mentioned. Empty arrays if none.`;
     };
   }
 
-  // ============================================================
+ 
   // DISEASE NORMALIZATION
-  // ============================================================
+ 
   async normalizeDisease(disease) {
     if (!disease || typeof disease !== "string") return disease;
 

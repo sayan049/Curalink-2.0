@@ -1,6 +1,6 @@
 class RankingService {
   constructor() {
-    // ── High-impact medical journals ─────────────────────────────────────────
+    // ── High-impact medical journals
     this.highImpactJournals = new Set([
       "nature medicine",
       "new england journal of medicine",
@@ -1154,7 +1154,7 @@ class RankingService {
       ],
     };
 
-    // ── ✅ NEW: Hard trial exclusion patterns ─────────────────────────────────
+    // ── ✅ NEW: Hard trial exclusion patterns 
     // Trials whose TITLE matches these are hard-rejected regardless of other scores.
     // These are completely unrelated to treating the disease.
     this.trialHardExclusionPatterns = [
@@ -2473,9 +2473,8 @@ class RankingService {
     return { primary: [], secondary: [] };
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
   // CLINICAL TRIAL RANKING
-  // ══════════════════════════════════════════════════════════════════════════
+
 
   rankClinicalTrials(trials, query, disease, context = {}, intent = null) {
     if (!Array.isArray(trials) || trials.length === 0) return [];
@@ -2751,10 +2750,10 @@ class RankingService {
     const diseaseLower = disease ? disease.toLowerCase() : "";
     const intentType = context._intent?.type || "general";
 
-    // ── Factor 1: Location boost ──────────────────────────────────────────
-    // ── Factor 1: Location scoring ────────────────────────────────────────────
+    // ── Factor 1: Location boost
+    // ── Factor 1: Location scoring 
     if (location) {
-      // ── User HAS a location preference ───────────────────────────────────
+      // ── User HAS a location preference 
       if (trial.isLocal) {
         // Trial has a site in user's city/country
         const priority = trial._matchPriority || 1;
@@ -2909,7 +2908,7 @@ class RankingService {
     else if (lc >= 2) score += 3;
     else if (lc >= 1) score += 1;
 
-    // ── Factor 10: Recency (0–10 pts) ─────────────────────────────────────
+    // ── Factor 10: Recency (0–10 pts) 
     if (trial.startDate) {
       const age =
         new Date().getFullYear() - new Date(trial.startDate).getFullYear();
@@ -2923,9 +2922,9 @@ class RankingService {
     return { ...trial, _rawScore: Math.max(0, score) };
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+ 
   // STANDALONE LOCATION SCORE
-  // ══════════════════════════════════════════════════════════════════════════
+  
 
   calculateLocationScore(trial, userLocation) {
     if (!userLocation || !trial.locations?.length) return 0;
@@ -2993,9 +2992,9 @@ class RankingService {
     return selected;
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+ 
   // UTILITY
-  // ══════════════════════════════════════════════════════════════════════════
+
 
   calculateTitleSimilarity(title1, title2) {
     if (!title1 || !title2) return 0;

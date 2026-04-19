@@ -110,6 +110,19 @@ IMPORTANT INSTRUCTIONS FOR THIS QUERY:
 - Do NOT cite papers about chemotherapy/immunotherapy as evidence about food safety`;
     }
 
+    // ── Low result count honesty ──────────────────────────────────────────
+if (context?.lowResultCount) {
+  prompt += `
+
+⚠️  LOW RESULT WARNING: Only ${context.actualPaperCount} paper(s) were found.
+- Only cite findings from the ${context.actualPaperCount} paper(s) provided above
+- Do NOT fill gaps using your training data knowledge
+- Do NOT fabricate citations like [2] or [3] if they do not exist in the list
+- If the papers don't fully answer the question, say:
+  "Limited research was found on this specific topic. The available evidence suggests..."
+- Never invent statistics, drug names, or outcomes not present in the provided abstracts`;
+}
+
     // ── Location context ──────────────────────────────────────────────────────
     if (location) {
       if (noLocalTrials && fallbackCount > 0) {

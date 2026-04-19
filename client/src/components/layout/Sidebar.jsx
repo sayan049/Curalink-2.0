@@ -16,7 +16,7 @@ const Sidebar = () => {
   const { sidebarOpen, setSidebarOpen } = useUIStore();
   const location = useLocation();
 
-  // ✅ Don't render on chat pages - chat has its own sidebar
+  // Don't render on chat pages - chat has its own sidebar
   if (location.pathname.startsWith('/chat')) {
     return null;
   }
@@ -38,13 +38,13 @@ const Sidebar = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 lg:hidden"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
       </AnimatePresence>
 
-      {/* ✅ Desktop Sidebar - permanent on large screens */}
+      {/* Desktop Sidebar */}
       <aside className="hidden lg:flex flex-col w-56 flex-shrink-0 bg-white/70 backdrop-blur-md border-r border-slate-200 min-h-[calc(100vh-4rem)]">
         <SidebarContent
           menuItems={menuItems}
@@ -54,15 +54,15 @@ const Sidebar = () => {
         />
       </aside>
 
-      {/* ✅ Mobile Sidebar - slide in/out */}
+      {/* Mobile Sidebar - FULL HEIGHT, NO TOP PADDING, NO GAP */}
       <AnimatePresence>
         {sidebarOpen && (
           <motion.aside
-            initial={{ x: -256 }}
+            initial={{ x: -280 }}
             animate={{ x: 0 }}
-            exit={{ x: -256 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-16 left-0 h-[calc(100vh-4rem)] w-56 z-50 bg-white border-r border-slate-200 shadow-xl lg:hidden"
+            exit={{ x: -280 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+            className="fixed inset-y-0 left-0 w-64 z-50 bg-white border-r border-slate-200 shadow-2xl lg:hidden"
           >
             <SidebarContent
               menuItems={menuItems}
@@ -78,22 +78,22 @@ const Sidebar = () => {
 };
 
 const SidebarContent = ({ menuItems, location, onClose, showClose, isDesktop }) => {
-  const { setSidebarOpen } = useUIStore();
-
   return (
     <div className="flex flex-col h-full">
       {/* Mobile Header */}
       {showClose && (
-        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-medical rounded-lg flex items-center justify-center">
               <Activity className="w-4 h-4 text-white" />
             </div>
             <span className="font-bold gradient-text">Curalink</span>
           </div>
+
           <button
             onClick={onClose}
             className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+            aria-label="Close sidebar"
           >
             <X className="w-4 h-4 text-slate-500" />
           </button>
@@ -101,10 +101,11 @@ const SidebarContent = ({ menuItems, location, onClose, showClose, isDesktop }) 
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.path ||
+          const isActive =
+            location.pathname === item.path ||
             (item.path === '/chat' && location.pathname.startsWith('/chat'));
 
           return (
@@ -129,7 +130,6 @@ const SidebarContent = ({ menuItems, location, onClose, showClose, isDesktop }) 
               />
               <span className="text-sm font-medium">{item.label}</span>
 
-              {/* Active indicator */}
               {isActive && (
                 <motion.div
                   layoutId="activeIndicator"
@@ -142,7 +142,7 @@ const SidebarContent = ({ menuItems, location, onClose, showClose, isDesktop }) 
       </nav>
 
       {/* Bottom Status */}
-      <div className="p-3 border-t border-slate-200">
+      <div className="p-3 border-t border-slate-100">
         <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
           <span className="text-xs text-slate-600 font-medium">AI Online</span>

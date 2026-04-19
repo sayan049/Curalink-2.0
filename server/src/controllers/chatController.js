@@ -1638,6 +1638,65 @@ export const sendMessage = async (req, res, next) => {
     );
 
     // ── 13. Generate AI response ───────────────────────────────────────────
+
+    // ✅ HARD BLOCK — No papers AND no trials found — skip LLM entirely
+    // Prevents hallucination when search returns nothing
+    if (publications.length === 0 && clinicalTrials.length === 0) {
+      console.log(
+        "⚠️  No publications or trials found — skipping LLM to prevent hallucination",
+      );
+
+      return sendSystemMessage({
+        res,
+        conversation,
+        userMessage,
+        startTime,
+        effectiveLocation,
+        messageData: {
+          content: `I searched PubMed, OpenAlex, and ClinicalTrials.gov for "${trimmedContent}" but could not find relevant research papers or clinical trials${effectiveDisease ? ` for ${effectiveDisease}` : ""}. This may be because the topic is very specific or the query needs rephrasing. Please try a different search term or consult a healthcare professional directly.`,
+          metadata: {
+            disease: effectiveDisease,
+            intent: searchResults.intent,
+            location: effectiveLocation,
+            publications: [],
+            clinicalTrials: [],
+            structuredResponse: {
+              conditionOverview: `No research papers were found for this query${effectiveDisease ? ` about ${effectiveDisease}` : ""}.`,
+              keyFindings: [],
+              researchInsights:
+                "No relevant publications were found in PubMed or OpenAlex for this specific query. Try rephrasing or broadening your search.",
+              clinicalTrialsSummary:
+                "No clinical trials were found for this query.",
+              recommendations: [
+                "Try rephrasing your query with different terms",
+                "Broaden your search — for example, search the disease name only",
+                "Consult ClinicalTrials.gov directly for the latest trial listings",
+                "Speak with a qualified healthcare professional",
+              ],
+              safetyConsiderations: [],
+              sourceSnippets: [],
+              references: { publicationCount: 0, trialCount: 0 },
+            },
+            queryExpansion: searchResults.expandedQuery || searchQuery,
+            originalQuery: trimmedContent,
+            modelUsed: "no_results_guard",
+            processingTime: Date.now() - startTime,
+          },
+        },
+      });
+    }
+
+    // ✅ LOW PAPER COUNT — Add honesty flag to context before LLM call
+    // Triggers extra instruction in system prompt to not fill gaps
+    // with training data when only 1-2 papers were found
+    if (publications.length < 3) {
+      enhancedContext.lowResultCount = true;
+      enhancedContext.actualPaperCount = publications.length;
+      console.log(
+        `⚠️  Low paper count: ${publications.length} — injecting honesty instruction into prompt`,
+      );
+    }
+
     let aiResponse = {
       structuredResponse: {
         conditionOverview: `Research on: ${effectiveDisease || trimmedContent}`,

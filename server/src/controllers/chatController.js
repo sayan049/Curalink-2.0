@@ -272,6 +272,9 @@ const DISEASE_LIST = [
     patterns: [
       "parkinson",
       "parkinsons",
+      "perkinson",
+      "parkinsons disease",
+    "parkinson disease",
       "deep brain stimulation",
       "dbs",
       "subthalamic nucleus",

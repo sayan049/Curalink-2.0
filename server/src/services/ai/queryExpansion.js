@@ -2,7 +2,7 @@ class QueryExpansionService {
   constructor() {
     this.currentYear = new Date().getFullYear();
 
-    // ── Known drug names for drug-specific intent detection 
+    // ── Known drug names for drug-specific intent detection
     this.knownDrugs = new Set([
       // Oncology
       "pembrolizumab",
@@ -120,7 +120,7 @@ class QueryExpansionService {
       "collagen",
     ]);
 
-    // ── Medical procedures that map to treatment_solutions intent 
+    // ── Medical procedures that map to treatment_solutions intent
     this.procedureTerms = [
       "deep brain stimulation",
       "dbs",
@@ -176,7 +176,7 @@ class QueryExpansionService {
       "safe to drink",
       "avoid eating",
       "avoid drinking",
-      
+
       "can i drink",
       "safe to have",
       "can i smoke",
@@ -187,7 +187,6 @@ class QueryExpansionService {
       "is it good",
       "is it bad",
       "can i use",
-
     ];
 
     // These short terms MUST use word-boundary matching
@@ -210,7 +209,7 @@ class QueryExpansionService {
     ];
   }
 
-  // ── Helper: detect if query is about diet/lifestyle 
+  // ── Helper: detect if query is about diet/lifestyle
   _isFoodOrLifestyleQuery(q) {
     // Check substring-safe terms first
     if (this.foodSubstringTerms.some((term) => q.includes(term))) return true;
@@ -225,9 +224,7 @@ class QueryExpansionService {
     });
   }
 
- 
   // INTENT DETECTION
-  
 
   detectQueryIntent(query) {
     if (!query || typeof query !== "string") {
@@ -239,7 +236,7 @@ class QueryExpansionService {
 
     const q = query.toLowerCase();
 
-    // ─── RESEARCHER QUERIES 
+    // ─── RESEARCHER QUERIES
     if (
       q.includes("top researcher") ||
       q.includes("best researcher") ||
@@ -260,7 +257,7 @@ class QueryExpansionService {
       };
     }
 
-    // ─── CLINICAL TRIAL QUERIES 
+    // ─── CLINICAL TRIAL QUERIES
     if (
       q.includes("clinical trial") ||
       q.includes("trial for") ||
@@ -339,7 +336,7 @@ class QueryExpansionService {
       };
     }
 
-    // ─── SUPPLEMENT / SAFETY QUERIES 
+    // ─── SUPPLEMENT / SAFETY QUERIES
     const suppFound = [...this.supplementTerms].find((term) =>
       q.includes(term),
     );
@@ -350,7 +347,7 @@ class QueryExpansionService {
       };
     }
 
-    // ─── SPECIFIC PROCEDURE / TECHNIQUE QUERIES 
+    // ─── SPECIFIC PROCEDURE / TECHNIQUE QUERIES
     const procedureFound = this.procedureTerms.find((proc) => q.includes(proc));
     if (procedureFound) {
       return {
@@ -359,7 +356,7 @@ class QueryExpansionService {
       };
     }
 
-    // ─── TREATMENT QUERIES 
+    // ─── TREATMENT QUERIES
     if (
       q.includes("latest treatment") ||
       q.includes("new treatment") ||
@@ -388,7 +385,7 @@ class QueryExpansionService {
       };
     }
 
-    // ─── RECENT STUDIES QUERIES 
+    // ─── RECENT STUDIES QUERIES
     if (
       q.includes("recent studies") ||
       q.includes("recent research") ||
@@ -475,7 +472,7 @@ class QueryExpansionService {
       };
     }
 
-    // ─── PROGNOSIS / SURVIVAL QUERIES 
+    // ─── PROGNOSIS / SURVIVAL QUERIES
     if (
       q.includes("prognosis") ||
       q.includes("survival rate") ||
@@ -610,12 +607,9 @@ class QueryExpansionService {
       type: "general",
       description: "Find relevant research on this topic",
     };
-
- 
   }
 
   // PUBMED QUERY BUILDER
-  
 
   buildPubMedQuery(disease, intent, originalQuery, currentYear) {
     const minYear = currentYear - 3;
@@ -735,9 +729,7 @@ class QueryExpansionService {
     return queries[intent.type] || queries.general;
   }
 
-  
   // OPENALEX QUERY BUILDER
-
 
   buildOpenAlexQuery(disease, intent, originalQuery) {
     const currentYear = new Date().getFullYear();
@@ -850,9 +842,7 @@ class QueryExpansionService {
     return queries[intent.type] || queries.general;
   }
 
-
   // MAIN ENTRY POINT
-  
 
   async expandQuery(originalQuery, disease, context = {}) {
     try {
@@ -888,9 +878,7 @@ class QueryExpansionService {
     }
   }
 
-  
   // UTILITY
-  
 
   extractIntent(query) {
     return this.detectQueryIntent(query);

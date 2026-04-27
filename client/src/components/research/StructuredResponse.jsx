@@ -10,10 +10,10 @@ import {
   Award,
   FlaskConical,
   TrendingUp,
-  Sparkles,
   AlertTriangle,
   Quote,
   ChevronRight,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 
@@ -26,27 +26,26 @@ const extractTopResearchers = (publications) => {
     if (!pub.authors || !Array.isArray(pub.authors)) return;
     pub.authors.forEach((author, authorIdx) => {
       if (!author || author === "Unknown" || author.trim().length < 3) return;
-      const cleanAuthor = author.trim();
-      if (!authorStats[cleanAuthor]) {
-        authorStats[cleanAuthor] = {
-          name: cleanAuthor,
+      const key = author.trim();
+      if (!authorStats[key]) {
+        authorStats[key] = {
+          name: key,
           publications: [],
           totalCitations: 0,
           latestYear: 0,
           isFirstAuthor: false,
         };
       }
-      authorStats[cleanAuthor].publications.push({
+      authorStats[key].publications.push({
         title: pub.title,
         year: pub.year,
         url: pub.url,
         journal: pub.journalName,
-        citationCount: pub.citationCount || 0,
       });
-      authorStats[cleanAuthor].totalCitations += pub.citationCount || 0;
-      if (pub.year > authorStats[cleanAuthor].latestYear)
-        authorStats[cleanAuthor].latestYear = pub.year;
-      if (authorIdx === 0) authorStats[cleanAuthor].isFirstAuthor = true;
+      authorStats[key].totalCitations += pub.citationCount || 0;
+      if (pub.year > authorStats[key].latestYear)
+        authorStats[key].latestYear = pub.year;
+      if (authorIdx === 0) authorStats[key].isFirstAuthor = true;
     });
   });
 
@@ -65,56 +64,24 @@ const extractTopResearchers = (publications) => {
     .slice(0, 6);
 };
 
-// ── Section wrapper ───────────────────────────────────────
-const Section = ({
-  icon: Icon,
-  title,
-  subtitle,
-  iconBg,
-  iconColor,
-  borderColor,
-  bgColor,
-  accentGradient,
-  children,
-  delay = 0,
-}) => (
+// ── Simple section block ──────────────────────────────────
+const Block = ({ icon: Icon, iconColor, title, accent, children, delay = 0 }) => (
   <motion.div
-    initial={{ opacity: 0, y: 8 }}
+    initial={{ opacity: 0, y: 6 }}
     animate={{ opacity: 1, y: 0 }}
-    transition={{ delay, duration: 0.3 }}
-    className={cn(
-      "relative overflow-hidden rounded-2xl border backdrop-blur-xl shadow-sm",
-      "bg-white/70 border-white/60",
-    )}
+    transition={{ delay, duration: 0.25 }}
+    className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden"
   >
-    {/* Top accent bar */}
-    <div className={cn("h-0.5 w-full bg-gradient-to-r", accentGradient)} />
+    {/* Accent top bar */}
+    <div className={cn("h-0.5 w-full", accent)} />
 
-    {/* Background glow */}
-    <div
-      className={cn(
-        "absolute top-0 right-0 w-20 h-20 rounded-full blur-3xl opacity-15 pointer-events-none",
-        bgColor,
-      )}
-    />
-
-    <div className="relative p-4 sm:p-5">
-      {/* Header */}
-      <div className="flex items-center gap-2.5 mb-3">
-        <div
-          className={cn(
-            "p-1.5 rounded-lg border shadow-sm flex-shrink-0",
-            iconBg,
-          )}
-        >
-          <Icon className={cn("w-4 h-4", iconColor)} />
+    <div className="p-4">
+      {/* Title row */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className={cn("p-1.5 rounded-lg bg-slate-50", iconColor)}>
+          <Icon className="w-4 h-4" />
         </div>
-        <div>
-          <h5 className="font-bold text-slate-900 text-sm">{title}</h5>
-          {subtitle && (
-            <p className="text-[11px] text-slate-500">{subtitle}</p>
-          )}
-        </div>
+        <h5 className="font-bold text-slate-900 text-sm">{title}</h5>
       </div>
 
       {children}
@@ -145,326 +112,280 @@ const StructuredResponse = ({ data, publications, isResearcherQuery }) => {
       animate={{ opacity: 1 }}
       className="space-y-3"
     >
-      {/* ── Condition Overview ─────────────────────── */}
+
+      {/* ── Overview ─────────────────────────────── */}
       {conditionOverview && (
-        <Section
+        <Block
           icon={FileText}
+          iconColor="text-blue-500"
           title="Condition Overview"
-          iconBg="bg-blue-50 border-blue-200"
-          iconColor="text-blue-600"
-          accentGradient="from-blue-500 via-cyan-500 to-sky-400"
-          bgColor="bg-blue-400"
+          accent="bg-gradient-to-r from-blue-400 to-cyan-400"
           delay={0}
         >
-          <p className="text-sm text-slate-700 leading-relaxed">
+          <p className="text-sm text-slate-600 leading-relaxed">
             {conditionOverview}
           </p>
-        </Section>
+        </Block>
       )}
 
-      {/* ── Top Researchers ────────────────────────── */}
+      {/* ── Researchers ──────────────────────────── */}
       {isResearcherQuery && topResearchers.length > 0 && (
-        <Section
+        <Block
           icon={Users}
+          iconColor="text-purple-500"
           title="Top Researchers"
-          subtitle="Ranked by publications and citations"
-          iconBg="bg-purple-50 border-purple-200"
-          iconColor="text-purple-600"
-          accentGradient="from-purple-500 via-violet-500 to-fuchsia-400"
-          bgColor="bg-purple-400"
-          delay={0.05}
+          accent="bg-gradient-to-r from-purple-400 to-violet-400"
+          delay={0.04}
         >
           <div className="space-y-2">
-            {topResearchers.map((researcher, idx) => (
-              <motion.div
-                key={researcher.name}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.05 }}
-                className="flex items-start gap-3 p-3 rounded-xl bg-gradient-to-br from-white to-purple-50/30 border border-purple-100 hover:border-purple-300 hover:shadow-sm transition-all duration-200"
+            {topResearchers.map((r, idx) => (
+              <div
+                key={r.name}
+                className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 hover:bg-purple-50 transition-colors"
               >
                 <div
                   className={cn(
-                    "flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold shadow-sm",
+                    "flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold text-white",
                     idx === 0
-                      ? "bg-gradient-to-br from-yellow-400 to-amber-500 text-white"
+                      ? "bg-gradient-to-br from-yellow-400 to-amber-500"
                       : idx === 1
-                        ? "bg-gradient-to-br from-slate-400 to-slate-500 text-white"
+                        ? "bg-gradient-to-br from-slate-400 to-slate-500"
                         : idx === 2
-                          ? "bg-gradient-to-br from-orange-400 to-orange-500 text-white"
-                          : "bg-gradient-to-br from-purple-400 to-purple-500 text-white",
+                          ? "bg-gradient-to-br from-orange-400 to-orange-500"
+                          : "bg-gradient-to-br from-purple-400 to-purple-500",
                   )}
                 >
                   {idx < 3 ? ["🥇", "🥈", "🥉"][idx] : idx + 1}
                 </div>
-
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-bold text-slate-900 text-sm">
-                      {researcher.name}
+                      {r.name}
                     </p>
-                    {researcher.isFirstAuthor && (
-                      <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[11px] rounded-full font-semibold border border-purple-200">
-                        Lead Author
+                    {r.isFirstAuthor && (
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">
+                        Lead
                       </span>
                     )}
                   </div>
-
                   <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500">
-                    <span className="inline-flex items-center gap-1">
+                    <span className="flex items-center gap-1">
                       <BookOpen className="w-3 h-3" />
-                      {researcher.publications.length} paper
-                      {researcher.publications.length > 1 ? "s" : ""}
+                      {r.publications.length} papers
                     </span>
-                    {researcher.totalCitations > 0 && (
-                      <span className="inline-flex items-center gap-1">
+                    {r.totalCitations > 0 && (
+                      <span className="flex items-center gap-1">
                         <Award className="w-3 h-3" />
-                        {researcher.totalCitations.toLocaleString()} cited
+                        {r.totalCitations.toLocaleString()} cited
                       </span>
                     )}
-                    {researcher.latestYear > 0 && (
-                      <span>{researcher.latestYear}</span>
-                    )}
                   </div>
-
-                  {researcher.publications.slice(0, 2).map((pub, i) => (
-                    <div key={i} className="mt-1.5">
-                      <a
-                        href={pub.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-start gap-1 text-xs text-primary-600 hover:text-primary-700 hover:underline group"
-                      >
-                        <ChevronRight className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                        <span className="line-clamp-1">{pub.title}</span>
-                      </a>
-                      {pub.journal && (
-                        <p className="text-[11px] text-slate-400 ml-4">
-                          {pub.journal} ({pub.year})
-                        </p>
-                      )}
-                    </div>
+                  {r.publications.slice(0, 1).map((pub, i) => (
+                    <a
+                      key={i}
+                      href={pub.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 flex items-start gap-1 text-xs text-primary-600 hover:underline line-clamp-1"
+                    >
+                      <ChevronRight className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                      {pub.title}
+                    </a>
                   ))}
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
-        </Section>
+        </Block>
       )}
 
-      {/* ── Key Findings ───────────────────────────── */}
+      {/* ── Key Findings ─────────────────────────── */}
       {keyFindings && keyFindings.length > 0 && (
-        <Section
+        <Block
           icon={Lightbulb}
+          iconColor="text-teal-500"
           title="Key Findings"
-          subtitle={`${keyFindings.length} evidence-backed findings`}
-          iconBg="bg-teal-50 border-teal-200"
-          iconColor="text-teal-600"
-          accentGradient="from-teal-500 via-emerald-500 to-green-400"
-          bgColor="bg-teal-400"
-          delay={0.08}
+          accent="bg-gradient-to-r from-teal-400 to-emerald-400"
+          delay={0.06}
         >
           <ul className="space-y-2">
-            {keyFindings.map((finding, idx) => (
-              <motion.li
+            {keyFindings.map((f, idx) => (
+              <li
                 key={idx}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.04 }}
-                className="flex items-start gap-2.5 p-2.5 rounded-xl bg-gradient-to-br from-teal-50/60 to-white border border-teal-100/80 text-sm text-slate-700"
+                className="flex items-start gap-2.5 text-sm text-slate-700"
               >
-                <div className="flex-shrink-0 w-5 h-5 rounded-full bg-gradient-to-br from-teal-500 to-emerald-500 text-white text-xs font-bold flex items-center justify-center shadow-sm">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-teal-100 text-teal-700 text-xs font-bold flex items-center justify-center mt-0.5">
                   {idx + 1}
-                </div>
-                <span className="leading-relaxed">{finding}</span>
-              </motion.li>
+                </span>
+                <span className="leading-relaxed">{f}</span>
+              </li>
             ))}
           </ul>
-        </Section>
+        </Block>
       )}
 
-      {/* ── Research Insights ──────────────────────── */}
+      {/* ── Research Insights ────────────────────── */}
       {researchInsights && (
-        <Section
+        <Block
           icon={TrendingUp}
+          iconColor="text-indigo-500"
           title="Research Insights"
-          iconBg="bg-indigo-50 border-indigo-200"
-          iconColor="text-indigo-600"
-          accentGradient="from-indigo-500 via-blue-500 to-sky-400"
-          bgColor="bg-indigo-400"
-          delay={0.1}
+          accent="bg-gradient-to-r from-indigo-400 to-blue-400"
+          delay={0.08}
         >
-          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
             {researchInsights}
           </p>
-        </Section>
+        </Block>
       )}
 
-      {/* ── Clinical Trials ────────────────────────── */}
+      {/* ── Clinical Trials ──────────────────────── */}
       {clinicalTrialsSummary && (
-        <Section
+        <Block
           icon={FlaskConical}
+          iconColor="text-purple-500"
           title="Clinical Trials"
-          iconBg="bg-purple-50 border-purple-200"
-          iconColor="text-purple-600"
-          accentGradient="from-purple-500 via-violet-500 to-fuchsia-400"
-          bgColor="bg-purple-400"
-          delay={0.12}
+          accent="bg-gradient-to-r from-purple-400 to-fuchsia-400"
+          delay={0.1}
         >
-          <p className="text-sm text-slate-700 leading-relaxed">
+          <p className="text-sm text-slate-600 leading-relaxed">
             {clinicalTrialsSummary}
           </p>
-        </Section>
+        </Block>
       )}
 
-      {/* ── Recommendations ────────────────────────── */}
+      {/* ── Recommendations ──────────────────────── */}
       {recommendations && recommendations.length > 0 && (
-        <Section
+        <Block
           icon={CheckCircle}
+          iconColor="text-green-500"
           title="Recommendations"
-          iconBg="bg-green-50 border-green-200"
-          iconColor="text-green-600"
-          accentGradient="from-green-500 via-emerald-500 to-teal-400"
-          bgColor="bg-green-400"
-          delay={0.14}
+          accent="bg-gradient-to-r from-green-400 to-emerald-400"
+          delay={0.12}
         >
           <ul className="space-y-2">
-            {recommendations.map((rec, idx) => (
+            {recommendations.map((r, idx) => (
               <li
                 key={idx}
                 className="flex items-start gap-2 text-sm text-slate-700"
               >
                 <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                <span className="leading-relaxed">{rec}</span>
+                <span className="leading-relaxed">{r}</span>
               </li>
             ))}
           </ul>
-        </Section>
+        </Block>
       )}
 
-      {/* ── Safety Considerations ──────────────────── */}
+      {/* ── Safety ───────────────────────────────── */}
       {safetyConsiderations && safetyConsiderations.length > 0 && (
-        <Section
+        <Block
           icon={Shield}
+          iconColor="text-red-500"
           title="Safety Considerations"
-          iconBg="bg-red-50 border-red-200"
-          iconColor="text-red-600"
-          accentGradient="from-red-500 via-rose-500 to-pink-400"
-          bgColor="bg-red-400"
-          delay={0.16}
+          accent="bg-gradient-to-r from-red-400 to-rose-400"
+          delay={0.14}
         >
           <ul className="space-y-2">
-            {safetyConsiderations.map((safety, idx) => (
+            {safetyConsiderations.map((s, idx) => (
               <li
                 key={idx}
-                className="flex items-start gap-2 p-2.5 rounded-xl bg-red-50/60 border border-red-100 text-sm text-slate-700"
+                className="flex items-start gap-2 p-2.5 rounded-xl bg-red-50 text-sm text-slate-700"
               >
                 <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                <span className="leading-relaxed">{safety}</span>
+                <span className="leading-relaxed">{s}</span>
               </li>
             ))}
           </ul>
-        </Section>
+        </Block>
       )}
 
-      {/* ── Source Snippets ────────────────────────── */}
+      {/* ── Sources ──────────────────────────────── */}
       {sourceSnippets && sourceSnippets.length > 0 && (
-        <Section
+        <Block
           icon={BookOpen}
+          iconColor="text-slate-500"
           title="Source Attribution"
-          subtitle={`${sourceSnippets.length} references`}
-          iconBg="bg-slate-50 border-slate-200"
-          iconColor="text-slate-600"
-          accentGradient="from-primary-500 via-trust-500 to-purple-500"
-          bgColor="bg-primary-400"
-          delay={0.18}
+          accent="bg-gradient-to-r from-primary-400 to-trust-400"
+          delay={0.16}
         >
-          <div className="space-y-2.5">
-            {sourceSnippets.map((source, idx) => (
-              <motion.div
+          <div className="space-y-2">
+            {sourceSnippets.map((src, idx) => (
+              <div
                 key={idx}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.04 }}
-                className="group flex items-start gap-3 p-3 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-200/80 hover:border-primary-300 hover:shadow-sm transition-all duration-200"
+                className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 transition-all duration-200 group"
               >
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-trust-500 text-white text-xs font-bold flex items-center justify-center shadow-sm">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-trust-500 text-white text-xs font-bold flex items-center justify-center">
                   {idx + 1}
                 </span>
 
                 <div className="flex-1 min-w-0">
                   <a
-                    href={source.url}
+                    href={src.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm font-semibold text-slate-900 hover:text-primary-600 transition-colors leading-snug line-clamp-2 inline-flex items-start gap-1 group/link"
+                    className="text-sm font-semibold text-slate-900 hover:text-primary-600 transition-colors line-clamp-2 leading-snug flex items-start gap-1"
                   >
-                    <span>{source.title}</span>
-                    <ExternalLink className="w-3 h-3 flex-shrink-0 mt-0.5 opacity-0 group-hover/link:opacity-100 transition-opacity text-primary-500" />
+                    <span>{src.title}</span>
+                    <ExternalLink className="w-3 h-3 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-primary-400" />
                   </a>
 
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                    {source.authors && (
+                  <div className="flex items-center flex-wrap gap-1.5 mt-1">
+                    {src.authors && (
                       <span className="text-xs text-slate-500 truncate max-w-[160px]">
-                        {source.authors}
+                        {src.authors}
                       </span>
                     )}
-                    {source.year && (
-                      <>
-                        <span className="text-slate-300">·</span>
-                        <span className="text-xs font-semibold text-slate-700">
-                          {source.year}
-                        </span>
-                      </>
+                    {src.year && (
+                      <span className="text-xs font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                        {src.year}
+                      </span>
                     )}
-                    {source.platform && (
-                      <>
-                        <span className="text-slate-300">·</span>
-                        <span
-                          className={cn(
-                            "text-[11px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide",
-                            source.platform === "PUBMED"
-                              ? "bg-blue-50 text-blue-700 border border-blue-200"
-                              : "bg-emerald-50 text-emerald-700 border border-emerald-200",
-                          )}
-                        >
-                          {source.platform}
-                        </span>
-                      </>
+                    {src.platform && (
+                      <span
+                        className={cn(
+                          "text-[11px] px-1.5 py-0.5 rounded-md font-bold uppercase",
+                          src.platform === "PUBMED"
+                            ? "bg-blue-50 text-blue-600"
+                            : "bg-emerald-50 text-emerald-600",
+                        )}
+                      >
+                        {src.platform}
+                      </span>
                     )}
                   </div>
 
-                  {source.snippet && (
-                    <div className="mt-2 flex items-start gap-1.5 p-2 rounded-lg bg-primary-50/60 border border-primary-100">
+                  {src.snippet && (
+                    <div className="mt-2 flex items-start gap-1.5 bg-white rounded-lg p-2 border-l-2 border-primary-300">
                       <Quote className="w-3 h-3 text-primary-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-xs text-slate-600 italic leading-relaxed line-clamp-2">
-                        {source.snippet}
+                      <p className="text-xs text-slate-500 italic leading-relaxed line-clamp-2">
+                        {src.snippet}
                       </p>
                     </div>
                   )}
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
-        </Section>
+        </Block>
       )}
 
-      {/* ── References footer ──────────────────────── */}
+      {/* ── Footer ───────────────────────────────── */}
       {references && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="flex items-center gap-4 pt-3 border-t border-slate-200/60"
+          className="flex items-center gap-3 pt-2 border-t border-slate-100"
         >
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-700 font-semibold">
-            <BookOpen className="w-3.5 h-3.5" />
+          <span className="flex items-center gap-1.5 text-xs text-slate-500 bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-100 font-medium">
+            <BookOpen className="w-3.5 h-3.5 text-blue-500" />
             {references.publicationCount || 0} publications
-          </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-xs text-purple-700 font-semibold">
-            <FlaskConical className="w-3.5 h-3.5" />
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-slate-500 bg-purple-50 px-2.5 py-1.5 rounded-lg border border-purple-100 font-medium">
+            <FlaskConical className="w-3.5 h-3.5 text-purple-500" />
             {references.trialCount || 0} trials
-          </div>
+          </span>
           <div className="ml-auto flex items-center gap-1 text-[11px] text-slate-400">
             <Sparkles className="w-3 h-3" />
             LLaMA 3.1

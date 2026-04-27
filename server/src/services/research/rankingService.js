@@ -447,6 +447,12 @@ class RankingService {
         "pulmonary fibrosis",
         "pulmonary hypertension",
         "idiopathic pulmonary",
+        // ✅ ADDED: Corrigendum / correction notices
+        "corrigendum",
+        "erratum",
+        "correction to",
+        "publisher correction",
+        "author correction",
       ],
       recent_research: [],
       clinical_trials: [],
@@ -460,15 +466,15 @@ class RankingService {
         "risk factor for cancer",
         "risk factors for cancer",
         "narrative review of risk factors",
-        "incp procedures", // procedure acronym papers
+        "incp procedures",
         "in vitro",
-        "in vivo", // lab studies not clinical guidance
+        "in vivo",
         "cell line",
         "mouse model",
         "murine",
-        "calpain pathway", // pure mechanism — not dietary guidance
-        "apoptosis in human", // lab cell death study
-        "synergizes with camptothecin", // drug combination study
+        "calpain pathway",
+        "apoptosis in human",
+        "synergizes with camptothecin",
       ],
       comparison: [],
       access_cost: [],
@@ -519,6 +525,17 @@ class RankingService {
           "before targeted",
           "imaging protocol",
           "protocol study",
+          // ✅ ADDED: Corrigendum / correction notices
+          "corrigendum to",
+          "corrigendum:",
+          "erratum to",
+          "erratum:",
+          "correction to",
+          "correction:",
+          "publisher's note",
+          "authors regret",
+          "retraction",
+          "retracted",
         ],
         negativeAbstract: [
           "prediction model",
@@ -529,6 +546,12 @@ class RankingService {
           "historical cohort",
           "aims to investigate",
           "will be enrolled",
+          // ✅ ADDED: Future study signals
+          "this study aims to",
+          "we aim to evaluate",
+          "will be recruited",
+          "is currently recruiting",
+          "study is ongoing",
         ],
       },
       recent_research: {
@@ -568,6 +591,11 @@ class RankingService {
           "yoga therapy",
           "herbal medicine",
           "herb pair",
+          // ✅ ADDED
+          "corrigendum to",
+          "erratum to",
+          "correction to",
+          "retraction",
         ],
         negativeAbstract: [
           "traditional chinese medicine",
@@ -642,7 +670,6 @@ class RankingService {
           "benefit",
           "association",
           "significantly",
-          // ✅ NEW: Diet and lifestyle specific signals
           "dietary",
           "nutrition",
           "nutritional",
@@ -657,7 +684,6 @@ class RankingService {
           "clinical guidance",
           "guideline",
         ],
-        // ✅ NEW: Hard reject pure lab/mechanism papers for lifestyle queries
         negativeTitle: [
           "in vitro",
           "cell line",
@@ -669,7 +695,6 @@ class RankingService {
           "molecular mechanism of",
           "signaling pathway of",
           "narrative review of risk factors",
-          // ✅ ADD: Protocol papers have no results yet
           "study protocol",
           "protocol of the",
           "protocol for a",
@@ -770,7 +795,6 @@ class RankingService {
         "apoptosis pathway",
         "mechanistic study",
         "mechanistic insights",
-        // ✅ NEW: Catch drug-synergy lab studies
         "synergizes with",
         "calpain pathway",
         "apoptosis in human",
@@ -852,6 +876,18 @@ class RankingService {
         "state of the art",
         "overview of",
       ],
+      // ✅ ADDED: Corrigendum as its own type so it can be penalised
+      correction_notice: [
+        "corrigendum",
+        "erratum",
+        "correction to",
+        "publisher's correction",
+        "author correction",
+        "retraction",
+        "retracted",
+        "authors regret",
+        "this corrects",
+      ],
       methodology_protocol: [
         "study protocol",
         "protocol for",
@@ -876,6 +912,7 @@ class RankingService {
           "diagnostic_biomarker",
           "cost_analysis",
           "methodology_protocol",
+          "correction_notice", // ✅ ADDED
         ],
       },
       recent_research: {
@@ -886,62 +923,114 @@ class RankingService {
           "drug_delivery",
           "cost_analysis",
           "methodology_protocol",
+          "correction_notice", // ✅ ADDED
         ],
       },
       mechanism: {
         preferred: ["mechanism_paper"],
         acceptable: ["review_article"],
-        penalised: ["cost_analysis", "methodology_protocol"],
+        penalised: [
+          "cost_analysis",
+          "methodology_protocol",
+          "correction_notice", // ✅ ADDED
+        ],
       },
       symptoms_diagnosis: {
         preferred: ["diagnostic_biomarker"],
         acceptable: ["clinical_outcome", "review_article"],
-        penalised: ["cost_analysis", "drug_delivery", "methodology_protocol"],
+        penalised: [
+          "cost_analysis",
+          "drug_delivery",
+          "methodology_protocol",
+          "correction_notice", // ✅ ADDED
+        ],
       },
       clinical_trials: {
         preferred: ["clinical_outcome"],
         acceptable: ["review_article", "diagnostic_biomarker"],
-        penalised: ["mechanism_paper", "cost_analysis", "methodology_protocol"],
+        penalised: [
+          "mechanism_paper",
+          "cost_analysis",
+          "methodology_protocol",
+          "correction_notice", // ✅ ADDED
+        ],
       },
       prognosis: {
         preferred: ["clinical_outcome"],
         acceptable: ["review_article", "diagnostic_biomarker"],
-        penalised: ["mechanism_paper", "drug_delivery", "cost_analysis"],
+        penalised: [
+          "mechanism_paper",
+          "drug_delivery",
+          "cost_analysis",
+          "correction_notice", // ✅ ADDED
+        ],
       },
       side_effects: {
         preferred: ["clinical_outcome"],
         acceptable: ["review_article"],
-        penalised: ["mechanism_paper", "prediction_model", "cost_analysis"],
+        penalised: [
+          "mechanism_paper",
+          "prediction_model",
+          "cost_analysis",
+          "correction_notice", // ✅ ADDED
+        ],
       },
       prevention: {
         preferred: ["clinical_outcome"],
         acceptable: ["review_article"],
-        penalised: ["mechanism_paper", "drug_delivery", "cost_analysis"],
+        penalised: [
+          "mechanism_paper",
+          "drug_delivery",
+          "cost_analysis",
+          "correction_notice", // ✅ ADDED
+        ],
       },
       comparison: {
         preferred: ["clinical_outcome"],
         acceptable: ["review_article"],
-        penalised: ["mechanism_paper", "prediction_model", "cost_analysis"],
+        penalised: [
+          "mechanism_paper",
+          "prediction_model",
+          "cost_analysis",
+          "correction_notice", // ✅ ADDED
+        ],
       },
       safety_efficacy: {
         preferred: ["clinical_outcome"],
         acceptable: ["review_article", "diagnostic_biomarker"],
-        penalised: ["mechanism_paper", "drug_delivery", "cost_analysis"],
+        penalised: [
+          "mechanism_paper",
+          "drug_delivery",
+          "cost_analysis",
+          "correction_notice", // ✅ ADDED
+        ],
       },
       researchers: {
         preferred: ["review_article", "clinical_outcome"],
         acceptable: ["mechanism_paper", "diagnostic_biomarker"],
-        penalised: ["cost_analysis", "methodology_protocol"],
+        penalised: [
+          "cost_analysis",
+          "methodology_protocol",
+          "correction_notice", // ✅ ADDED
+        ],
       },
       access_cost: {
         preferred: ["cost_analysis"],
         acceptable: ["review_article", "clinical_outcome"],
-        penalised: ["mechanism_paper", "drug_delivery"],
+        penalised: [
+          "mechanism_paper",
+          "drug_delivery",
+          "correction_notice", // ✅ ADDED
+        ],
       },
       general: {
         preferred: ["clinical_outcome", "review_article"],
         acceptable: ["mechanism_paper", "diagnostic_biomarker"],
-        penalised: ["cost_analysis", "methodology_protocol"],
+        penalised: [
+          "cost_analysis",
+          "methodology_protocol",
+          "correction_notice", // ✅ ADDED
+        ],
       },
     };
 
@@ -1044,15 +1133,12 @@ class RankingService {
       "time to progression",
     ];
 
-    // ── ✅ UPDATED: Stronger subtype exactness penalties ───────────────────────
-    // Increased exactBonus and partialPenalty to properly separate
-    // correct-subtype papers from wrong-subtype papers in ranking
     this.subtypeExactness = {
       "lung cancer": {
         exact: ["nsclc", "non-small cell", "non-small-cell"],
         partial: ["sclc", "small cell lung"],
-        exactBonus: 20, // ✅ increased from 15 → 20
-        partialPenalty: -20, // ✅ increased from -8 → -20 (strong enough to drop below meta-analyses)
+        exactBonus: 20,
+        partialPenalty: -20,
       },
       diabetes: {
         exact: ["type 2", "t2dm"],
@@ -1068,7 +1154,6 @@ class RankingService {
       },
     };
 
-    // ── ✅ UPDATED: Trial answer type patterns — added procedure/instrument trials ──
     this.trialAnswerTypePatterns = {
       treatment_trial: [
         "treatment of",
@@ -1131,7 +1216,6 @@ class RankingService {
         "nutrition",
         "rehabilitation",
         "survivorship",
-        // ✅ NEW: Procedure-related comfort/safety trials
         "bronchoscopy",
         "endoscopy",
         "cough suppression",
@@ -1154,26 +1238,19 @@ class RankingService {
       ],
     };
 
-    // ── ✅ NEW: Hard trial exclusion patterns 
-    // Trials whose TITLE matches these are hard-rejected regardless of other scores.
-    // These are completely unrelated to treating the disease.
     this.trialHardExclusionPatterns = [
-      // Procedural comfort trials — nothing to do with cancer treatment
       "cough suppression",
       "pain relief during",
       "bronchoscopy comfort",
       "lignocaine in",
       "lidocaine in",
       "sedation during",
-      // Purely non-disease topics that sneak in via organ name
       "dental",
       "endodontic treatment on cardiovascular",
       "bowel preparation",
       "cool roofs on health",
-      // Obstetric trials unrelated to the disease
       "induction of labour",
       "spontaneous labour",
-      // Anesthesia/procedural safety
       "dexmedetomidine and ketofol",
       "radial hemostasis",
       "challenges faced by",
@@ -1860,6 +1937,97 @@ class RankingService {
       colombo: "sri lanka",
       kathmandu: "nepal",
     };
+
+    // ✅ NEW: Patterns that indicate a paper has NO real results
+    // Used in _abstractHasRealAnswer()
+    this.abstractNoResultSignals = [
+      "this study aims",
+      "this trial aims",
+      "we aim to",
+      "we will investigate",
+      "will be enrolled",
+      "is ongoing",
+      "study protocol",
+      "correction to",
+      "erratum",
+      "corrigendum",
+      "we apologize",
+      "this corrects",
+      "the authors regret",
+      "publisher's correction",
+      "author correction",
+      "retraction notice",
+      "this article has been retracted",
+      "will be recruited",
+      "is currently recruiting",
+      "study is ongoing",
+      "we propose to",
+      "we plan to",
+    ];
+
+    // ✅ NEW: Patterns that indicate real clinical results exist in abstract
+    this.abstractRealResultSignals = [
+      "we found",
+      "we observed",
+      "we demonstrated",
+      "results showed",
+      "results show",
+      "results demonstrated",
+      "results indicate",
+      "our findings",
+      "our results",
+      "the study showed",
+      "the trial showed",
+      "demonstrated that",
+      "showed that",
+      "revealed that",
+      "significantly improved",
+      "significantly reduced",
+      "significantly increased",
+      "was associated with",
+      "were associated with",
+      "patients achieved",
+      "patients who received",
+      "median overall survival",
+      "median progression-free",
+      "overall survival was",
+      "progression-free survival was",
+      "response rate was",
+      "response rate of",
+      "hazard ratio",
+      "confidence interval",
+      "p value",
+      "p =",
+      "p<",
+      "p <",
+      "95% ci",
+      "compared with",
+      "compared to",
+      "superior to",
+      "non-inferior to",
+      "showed significant",
+      "found significant",
+      "identified significant",
+    ];
+
+    // ✅ NEW: Regex patterns for real clinical numbers in abstract
+    // A paper reporting actual numbers is almost certainly reporting real results
+    this.clinicalNumberPatterns = [
+      /\d+\.?\d*\s*%/, // "67%" or "45.3%"
+      /\d+\.?\d*\s*months/, // "18.5 months"
+      /hr\s*[=:]\s*0?\.\d+/i, // "HR = 0.72" or "HR: 0.65"
+      /hazard ratio.*\d/i, // "hazard ratio of 0.65"
+      /p\s*[<=>]\s*0?\.\d+/i, // "p < 0.05" or "p=0.001"
+      /p\s*value.*\d/i, // "p value of 0.03"
+      /median.*\d+\.?\d*\s*months/i, // "median of 18.5 months"
+      /os.*\d+\.?\d*\s*months/i, // "OS of 24 months"
+      /pfs.*\d+\.?\d*\s*months/i, // "PFS of 12 months"
+      /orr.*\d+\.?\d*\s*%/i, // "ORR of 45%"
+      /response rate.*\d+\.?\d*\s*%/i, // "response rate of 67%"
+      /survival.*\d+\.?\d*\s*%/i, // "survival of 78%"
+      /\d+\.?\d*\s*months.*survival/i, // "24 months survival"
+      /\(\d+\.?\d*.*\d+\.?\d*\)/, // confidence intervals like "(0.55-0.89)"
+    ];
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1873,11 +2041,54 @@ class RankingService {
     return !invalidators.some((inv) => text.includes(inv));
   }
 
+  // ✅ NEW: Check if abstract actually contains real results
+  // Returns false if paper is a protocol, corrigendum, or has no results
+  // Returns true if paper reports real clinical findings
+  _abstractHasRealAnswer(abstractLower, titleLower) {
+    // If abstract is too short it probably has no useful content
+    if (abstractLower.length < 80) return false;
+
+    // Hard reject: title contains corrigendum/erratum signals
+    const titleHasNoResult = this.abstractNoResultSignals.some((sig) =>
+      titleLower.includes(sig),
+    );
+    if (titleHasNoResult) return false;
+
+    // Hard reject: abstract contains no-result signals
+    const abstractHasNoResult = this.abstractNoResultSignals.some((sig) =>
+      abstractLower.includes(sig),
+    );
+    if (abstractHasNoResult) return false;
+
+    // Check for real result signals in abstract
+    const hasResultSignal = this.abstractRealResultSignals.some((sig) =>
+      abstractLower.includes(sig),
+    );
+    if (hasResultSignal) return true;
+
+    // Check for real clinical numbers
+    const hasRealNumbers = this.clinicalNumberPatterns.some((pattern) =>
+      pattern.test(abstractLower),
+    );
+    if (hasRealNumbers) return true;
+
+    // Abstract exists but has no result signals and no numbers
+    // It might still be a valid review — allow it through
+    // (we do not want to be too aggressive here)
+    return true;
+  }
+
+  // ✅ NEW: Check if abstract contains real clinical numbers
+  // Used as a scoring bonus, not a filter
+  _hasRealClinicalNumbers(abstractLower) {
+    return this.clinicalNumberPatterns.some((pattern) =>
+      pattern.test(abstractLower),
+    );
+  }
+
   _trialIsRelevant(conditionsCombined, titleLower, disease, diseaseTokens) {
     if (!disease || diseaseTokens.length === 0) return true;
 
-    // ── ✅ NEW: Hard title exclusion check — runs first, fastest rejection ──
-    // These trials are completely unrelated to treating any disease
     const isHardExcluded = this.trialHardExclusionPatterns.some((pattern) =>
       titleLower.includes(pattern),
     );
@@ -2088,26 +2299,22 @@ class RankingService {
       _rawScore: undefined,
     }));
 
-    // ✅ Age limits for time-sensitive intents
-    // "Latest treatments" should never return 2019 papers when 2026 papers exist
     const MAX_AGE_FOR_INTENT = {
-      treatment_solutions: 5, // max 5 years old
-      recent_research: 3, // max 3 years old
-      clinical_trials: 10, // trials context — allow older background papers
-      comparison: 5, // comparative studies should be recent
-      side_effects: 7, // safety data can be slightly older
-      prognosis: 7, // prognosis studies can be older
+      treatment_solutions: 5,
+      recent_research: 3,
+      clinical_trials: 10,
+      comparison: 5,
+      side_effects: 7,
+      prognosis: 7,
     };
 
-    const maxAge = MAX_AGE_FOR_INTENT[intentType] ?? null; // null = no age limit
+    const maxAge = MAX_AGE_FOR_INTENT[intentType] ?? null;
 
     const ranked = normalised
       .sort((a, b) => b.relevanceScore - a.relevanceScore)
       .filter((pub) => {
-        // Basic relevance threshold
         if (pub.relevanceScore <= 2) return false;
 
-        // ✅ Hard age filter for time-sensitive intents
         if (maxAge !== null) {
           const pubAge = currentYear - (pub.year || currentYear);
           if (pubAge > maxAge) {
@@ -2149,7 +2356,7 @@ class RankingService {
     const combined = `${titleLower} ${abstractLower}`;
     const diseaseLower = disease ? disease.toLowerCase() : "";
 
-    // ── Hard filter 1: Disease (multi-token aware) ────────────────────────
+    // ── Hard filter 1: Disease ────────────────────────────────────────────
     if (disease && diseaseTokens.length > 0) {
       const synonyms = this.diseaseSynonyms[diseaseLower] || [];
       const isMultiWord = diseaseTokens.length >= 2;
@@ -2196,6 +2403,38 @@ class RankingService {
       negativeTitles.some((sig) => titleLower.includes(sig))
     ) {
       console.log(`   🚫 Negative title: "${pub.title.substring(0, 70)}"`);
+      return { ...pub, _rawScore: 0 };
+    }
+
+    // ── Hard filter 4: Abstract must contain real results ─────────────────
+    // ✅ NEW: Only applies to result-oriented intents
+    // Rejects corrigenda, protocols, future study notices
+    const RESULT_REQUIRED_INTENTS = [
+      "treatment_solutions",
+      "recent_research",
+      "prognosis",
+      "comparison",
+      "side_effects",
+    ];
+    if (RESULT_REQUIRED_INTENTS.includes(intentType)) {
+      const hasRealAnswer = this._abstractHasRealAnswer(
+        abstractLower,
+        titleLower,
+      );
+      if (!hasRealAnswer) {
+        console.log(
+          `   ❌ No real results in abstract: "${pub.title.substring(0, 60)}"`,
+        );
+        return { ...pub, _rawScore: 0 };
+      }
+    }
+
+    // ── Hard filter 5: Minimum abstract length ───────────────────────────
+    // ✅ NEW: Papers with very short abstracts are usually not useful
+    if (abstractLower.length < 50) {
+      console.log(
+        `   ❌ Abstract too short (${abstractLower.length} chars): "${pub.title.substring(0, 60)}"`,
+      );
       return { ...pub, _rawScore: 0 };
     }
 
@@ -2259,7 +2498,6 @@ class RankingService {
     }
 
     // ── Factor 0.7: Subtype exactness (+20 / -20 pts) ─────────────────────
-    // ✅ -20 penalty now strong enough to push SCLC papers below NSCLC meta-analyses
     const subtypeBonus = this._getSubtypeExactnessBonus(
       titleLower,
       abstractLower,
@@ -2269,6 +2507,16 @@ class RankingService {
     if (subtypeBonus !== 0) {
       console.log(
         `   🎯 Subtype ${subtypeBonus > 0 ? "+" : ""}${subtypeBonus}pts: "${pub.title.substring(0, 50)}"`,
+      );
+    }
+
+    // ── Factor 0.8: Real clinical numbers bonus (0–20 pts) ────────────────
+    // ✅ NEW: Papers reporting actual numbers rank higher
+    // "OS of 18.5 months, HR 0.65, p<0.001" → these papers answer the question
+    if (this._hasRealClinicalNumbers(abstractLower)) {
+      score += 20;
+      console.log(
+        `   📈 Real clinical numbers (+20): "${pub.title.substring(0, 50)}"`,
       );
     }
 
@@ -2369,22 +2617,16 @@ class RankingService {
       );
     }
 
-    // ── ✅ NEW Factor 4.5: Exact query phrase match bonus (0–30 pts) ───────
-    // When user asks about a specific procedure or topic ("deep brain stimulation"),
-    // papers with that EXACT phrase in the title rank significantly higher.
-    // This prevents generic disease papers from outranking specific-topic papers.
+    // ── Factor 4.5: Exact query phrase match bonus (0–30 pts) ─────────────
     if (queryTokens.length >= 2) {
-      // Build phrase from query tokens (removes stop words already)
       const queryPhrase = queryTokens.join(" ");
 
-      // Full phrase match in title → highest bonus
       if (queryPhrase.length > 5 && titleLower.includes(queryPhrase)) {
         score += 30;
         console.log(
           `   🎯 Exact query phrase in title (+30): "${pub.title.substring(0, 55)}"`,
         );
       } else {
-        // Bigram matches — any adjacent pair of query tokens in title
         let bigramMatched = false;
         for (let i = 0; i < queryTokens.length - 1; i++) {
           const bigram = `${queryTokens[i]} ${queryTokens[i + 1]}`;
@@ -2396,11 +2638,10 @@ class RankingService {
               );
               bigramMatched = true;
             }
-            break; // Only count once
+            break;
           }
         }
 
-        // Also check abstract for full phrase (smaller bonus)
         if (
           !bigramMatched &&
           queryPhrase.length > 5 &&
@@ -2430,8 +2671,6 @@ class RankingService {
     else if (age <= 3) score += 12;
     else if (age <= 5) score += 8;
     else if (age <= 7) score += 0;
-
-    // > 10 years: 0 pts — old papers won't compete with 2026 papers
 
     // ── Factor 7: Source credibility (0–15 pts) ───────────────────────────
     if (pub.source === "pubmed") score += 10;
@@ -2473,8 +2712,9 @@ class RankingService {
     return { primary: [], secondary: [] };
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
   // CLINICAL TRIAL RANKING
-
+  // ══════════════════════════════════════════════════════════════════════════
 
   rankClinicalTrials(trials, query, disease, context = {}, intent = null) {
     if (!Array.isArray(trials) || trials.length === 0) return [];
@@ -2536,21 +2776,17 @@ class RankingService {
       _matchPriority: undefined,
     }));
 
-    // After filtering ranked trials, if fewer than 5 remain
-    // and there's a location set, lower the threshold
     const MIN_TRIALS_THRESHOLD = 5;
 
     const ranked = normalised
       .sort((a, b) => b.relevanceScore - a.relevanceScore)
       .filter((trial) => {
-        // ✅ If we have enough trials, use normal threshold
         if (
           normalised.filter((t) => t.relevanceScore > 1).length >=
           MIN_TRIALS_THRESHOLD
         ) {
           return trial.relevanceScore > 1;
         }
-        // ✅ If fewer than 5 pass, lower threshold to show what we have
         return trial.relevanceScore > 0;
       });
 
@@ -2750,12 +2986,9 @@ class RankingService {
     const diseaseLower = disease ? disease.toLowerCase() : "";
     const intentType = context._intent?.type || "general";
 
-    // ── Factor 1: Location boost
-    // ── Factor 1: Location scoring 
+    // ── Factor 1: Location scoring ────────────────────────────────────────
     if (location) {
-      // ── User HAS a location preference 
       if (trial.isLocal) {
-        // Trial has a site in user's city/country
         const priority = trial._matchPriority || 1;
         if (priority === 3) {
           score += 500;
@@ -2774,27 +3007,15 @@ class RankingService {
           );
         }
       } else if (trial.matchSource === "global_fallback") {
-        // No local trials exist for this disease in user's region.
-        // Showing global results as fallback — no bonus, no penalty.
         score += 0;
         console.log(
           `🌍 GLOBAL FALLBACK (+0): "${titleLower.substring(0, 50)}"`,
         );
       } else {
-        // Local trials DO exist but this trial is from a foreign country.
-        // Hard penalty — local trials must dominate when available.
         score -= 300;
         console.log(
           `🌍 NON-LOCAL     (-300): "${titleLower.substring(0, 50)}"`,
         );
-      }
-    } else {
-      // ── No location set anywhere (no message, no profile, no conversation) ──
-      // Pure global search — rank trials purely on disease relevance,
-      // phase, status, enrollment. No location bonus or penalty at all.
-      // matchSource = 'global' → neutral, scored on medical merit only.
-      if (trial.matchSource === "global") {
-        // Already logged at search time — no extra log needed here
       }
     }
 
@@ -2832,9 +3053,7 @@ class RankingService {
           );
     }
 
-    // ── Factor 2.5: Trial answer type (0–30 pts / 60% penalty) ───────────
-    // In rankingService._scoreTrial, update Factor 2.5:
-
+    // ── Factor 2.5: Trial answer type ─────────────────────────────────────
     const trialType = this._classifyTrialType(
       titleLower,
       conditionsCombined,
@@ -2846,8 +3065,6 @@ class RankingService {
         `   🏆 Perfect trial type [${trialType.primaryType}]: "${titleLower.substring(0, 50)}"`,
       );
     } else if (trialType.isPenalised) {
-      // ✅ Increased from 0.4 → 0.25 for treatment_solutions intent
-      // Diagnostic trials for a treatment query need stronger suppression
       const penaltyMultiplier =
         intentType === "treatment_solutions" ? 0.2 : 0.4;
       score = Math.floor(score * penaltyMultiplier);
@@ -2856,7 +3073,7 @@ class RankingService {
       );
     }
 
-    // ── Factor 3: Status (0–70 pts) ───────────────────────────────────────
+    // ── Factor 3: Status ──────────────────────────────────────────────────
     let statusScore = this.trialStatusScores[trial.status] || 5;
     if (
       trial.status === "COMPLETED" &&
@@ -2866,13 +3083,13 @@ class RankingService {
     }
     score += statusScore;
 
-    // ── Factor 4: Phase (0–20 pts) ────────────────────────────────────────
+    // ── Factor 4: Phase ───────────────────────────────────────────────────
     score +=
       this.trialPhaseScores[
         (trial.phase || "N/A").toUpperCase().replace(/\s+/g, "")
       ] || 5;
 
-    // ── Factor 5: Query relevance (0–20 pts) ──────────────────────────────
+    // ── Factor 5: Query relevance ─────────────────────────────────────────
     if (queryTokens.length > 0) {
       score += Math.min(
         20,
@@ -2884,7 +3101,7 @@ class RankingService {
       );
     }
 
-    // ── Factor 6: Enrollment (0–12 pts) ───────────────────────────────────
+    // ── Factor 6: Enrollment ──────────────────────────────────────────────
     const enrollment = trial.enrollmentCount || 0;
     if (enrollment >= 10000) score += 12;
     else if (enrollment >= 1000) score += 10;
@@ -2893,22 +3110,22 @@ class RankingService {
     else if (enrollment >= 50) score += 4;
     else if (enrollment > 0) score += 2;
 
-    // ── Factor 7: Contact (0–8 pts) ───────────────────────────────────────
+    // ── Factor 7: Contact ─────────────────────────────────────────────────
     if (trial.contact?.email && trial.contact?.phone) score += 8;
     else if (trial.contact?.email || trial.contact?.phone) score += 5;
 
-    // ── Factor 8: Interventions (0–5 pts) ─────────────────────────────────
+    // ── Factor 8: Interventions ───────────────────────────────────────────
     if (trial.interventions?.length > 0)
       score += Math.min(5, trial.interventions.length * 2);
 
-    // ── Factor 9: Multi-site (0–8 pts) ────────────────────────────────────
+    // ── Factor 9: Multi-site ──────────────────────────────────────────────
     const lc = trial.locations?.length || 0;
     if (lc >= 10) score += 8;
     else if (lc >= 5) score += 6;
     else if (lc >= 2) score += 3;
     else if (lc >= 1) score += 1;
 
-    // ── Factor 10: Recency (0–10 pts) 
+    // ── Factor 10: Recency ────────────────────────────────────────────────
     if (trial.startDate) {
       const age =
         new Date().getFullYear() - new Date(trial.startDate).getFullYear();
@@ -2921,10 +3138,6 @@ class RankingService {
 
     return { ...trial, _rawScore: Math.max(0, score) };
   }
-
- 
-  // STANDALONE LOCATION SCORE
-  
 
   calculateLocationScore(trial, userLocation) {
     if (!userLocation || !trial.locations?.length) return 0;
@@ -2992,9 +3205,9 @@ class RankingService {
     return selected;
   }
 
- 
+  // ══════════════════════════════════════════════════════════════════════════
   // UTILITY
-
+  // ══════════════════════════════════════════════════════════════════════════
 
   calculateTitleSimilarity(title1, title2) {
     if (!title1 || !title2) return 0;

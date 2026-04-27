@@ -2310,6 +2310,139 @@ class RankingService {
       clinical_trials: 20,
       general: 15,
     };
+
+    // ✅ NEW: Papers that DIRECTLY provide a treatment solution
+    // These get a score bonus — they answer "what treatment works"
+    this.directSolutionTitlePatterns = {
+      treatment_solutions: [
+        " vs ",
+        " versus ",
+        "compared to",
+        "compared with",
+        "superiority",
+        "non-inferior",
+        "head-to-head",
+        "efficacy of ",
+        "efficacy and safety of ",
+        "safety and efficacy of ",
+        "phase 3",
+        "phase iii",
+        "phase 2",
+        "phase ii",
+        "randomized controlled trial",
+        "randomised controlled trial",
+        "first-line treatment",
+        "second-line treatment",
+        "first-line therapy",
+        "second-line therapy",
+        "neoadjuvant",
+        "adjuvant",
+        "maintenance therapy",
+        "pembrolizumab",
+        "osimertinib",
+        "nivolumab",
+        "durvalumab",
+        "atezolizumab",
+        "domvanalimab",
+        "zimberelimab",
+        "datopotamab",
+        "lorlatinib",
+        "alectinib",
+        "brigatinib",
+        "erlotinib",
+        "capmatinib",
+        "semaglutide",
+        "tirzepatide",
+        "empagliflozin",
+        "dapagliflozin",
+        "lecanemab",
+        "donanemab",
+        "levodopa",
+        "carbidopa",
+      ],
+      prognosis: [
+        "survival of",
+        "overall survival in",
+        "5-year survival",
+        "prognosis of",
+        "prognostic factors in",
+        "mortality in",
+        "recurrence in",
+        "relapse in",
+        "hazard ratio for",
+        "survival analysis",
+      ],
+      symptoms_diagnosis: [
+        "diagnosis of",
+        "diagnostic accuracy of",
+        "sensitivity and specificity",
+        "early detection of",
+        "screening for",
+        "biomarker for",
+        "detection of",
+      ],
+      prevention: [
+        "prevention of",
+        "risk reduction",
+        "reduced incidence",
+        "prophylaxis",
+        "lifestyle intervention",
+        "chemoprevention",
+      ],
+      side_effects: [
+        "adverse events of",
+        "toxicity of",
+        "safety profile of",
+        "immune-related adverse",
+        "treatment-related adverse",
+        "tolerability of",
+        "side effects of",
+      ],
+    };
+
+    // ✅ NEW: Papers that study treatment CONTEXT not SOLUTIONS
+    // These get a score penalty — they are relevant but not direct answers
+    this.contextualPaperPatterns = {
+      treatment_solutions: [
+        "sex-based differences",
+        "sex differences in",
+        "gender differences in",
+        "age-related differences",
+        "racial differences",
+        "ethnic differences",
+        "prior treatment",
+        "prior therapy",
+        "treatment history",
+        "treatment sequence",
+        "treatment pattern",
+        "treatment patterns",
+        "factors associated with",
+        "factors affecting",
+        "factors influencing",
+        "determinants of",
+        "incidence of",
+        "prevalence of",
+        "epidemiology of",
+        "burden of",
+        "who benefits",
+        "patient selection",
+        "awareness of treatment",
+        "knowledge of treatment",
+      ],
+      prognosis: [
+        "risk factors for recurrence",
+        "factors affecting prognosis",
+        "characteristics of patients",
+        "awareness of prognosis",
+      ],
+      prevention: [
+        "awareness of",
+        "knowledge about",
+        "attitude toward",
+        "perception of",
+        "survey of risk",
+      ],
+    };
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -2788,12 +2921,8 @@ class RankingService {
     }
 
     // ── Hard filter 6: Wrong cancer subtype ───────────────────────────────
-    // ✅ FIXED: "small cell lung cancer" contains "lung cancer" as a substring
-    // Previous version incorrectly let SCLC papers through because
-    // hasGeneralDiseaseInTitle was true (lung cancer IS in the title
-    // but only as part of "small cell lung cancer")
-    // Fix: Strip all wrong subtype phrases from title first,
-    // then check if general disease name STILL appears standalone
+    // ✅ FIXED: Strip wrong subtype phrases then check if disease appears standalone
+    // Prevents "small cell lung cancer" passing as "lung cancer" paper
     if (disease && diseaseLower) {
       const subtypeConfig = this.subtypeExactness[diseaseLower];
       if (subtypeConfig && subtypeConfig.partial.length > 0) {
@@ -2804,7 +2933,6 @@ class RankingService {
           (e) => titleLower.includes(e) || abstractLower.includes(e),
         );
 
-        // Strip wrong subtype phrases then check if disease appears standalone
         const generalDiseaseStandalone = (() => {
           if (!titleLower.includes(diseaseLower)) return false;
           let stripped = titleLower;
@@ -2919,6 +3047,34 @@ class RankingService {
       console.log(
         `   📈 Real clinical numbers (+20): "${pub.title.substring(0, 50)}"`,
       );
+    }
+
+    // ── Factor 0.9: Direct solution vs contextual paper ──────────────────
+    // ✅ NEW: Papers that directly test/report a treatment outcome rank higher
+    // Papers that study treatment context (who responds, prior treatment effects)
+    // rank lower — they are relevant but not direct answers to the query
+    const directPatterns = this.directSolutionTitlePatterns[intentType] || [];
+    const contextPatterns = this.contextualPaperPatterns[intentType] || [];
+
+    if (directPatterns.length > 0 || contextPatterns.length > 0) {
+      const isDirectSolution = directPatterns.some((p) =>
+        titleLower.includes(p),
+      );
+      const isContextualPaper = contextPatterns.some((p) =>
+        titleLower.includes(p),
+      );
+
+      if (isDirectSolution && !isContextualPaper) {
+        score += 25;
+        console.log(
+          `   ✅ Direct solution paper (+25): "${pub.title.substring(0, 50)}"`,
+        );
+      } else if (isContextualPaper && !isDirectSolution) {
+        score = Math.floor(score * 0.6);
+        console.log(
+          `   📋 Contextual paper (×0.6): "${pub.title.substring(0, 50)}"`,
+        );
+      }
     }
 
     // ── Factor 1: Positive answer signal bonus ────────────────────────────
@@ -3451,13 +3607,11 @@ class RankingService {
     // ── Factor 2: Disease match ───────────────────────────────────────────
     if (disease && diseaseTokens.length > 0) {
       const synonyms = this.diseaseSynonyms[diseaseLower] || [];
-
       const exactInConditions =
         conditionsCombined.includes(diseaseLower) ||
         synonyms.some((s) =>
           this._synonymMatchValid(conditionsCombined, s, diseaseLower),
         );
-
       score += exactInConditions
         ? 40
         : Math.min(
@@ -3472,7 +3626,6 @@ class RankingService {
         synonyms.some((s) =>
           this._synonymMatchValid(titleLower, s, diseaseLower),
         );
-
       score += exactInTitle
         ? 18
         : Math.min(
@@ -3577,10 +3730,6 @@ class RankingService {
     return { 3: 40, 2: 25, 1: 15 }[tagged._matchPriority] || 0;
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // DIVERSIFICATION
-  // ══════════════════════════════════════════════════════════════════════════
-
   diversifyResults(rankedItems, topK = 8, similarityThreshold = 0.8) {
     const selected = [];
     const rejectedIds = new Set();
@@ -3635,10 +3784,6 @@ class RankingService {
 
     return selected;
   }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // UTILITY
-  // ══════════════════════════════════════════════════════════════════════════
 
   calculateTitleSimilarity(title1, title2) {
     if (!title1 || !title2) return 0;

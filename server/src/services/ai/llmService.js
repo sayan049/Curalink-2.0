@@ -59,7 +59,7 @@ class LLMService {
   }
 
   // ============================================================
-  // BUILD SYSTEM PROMPT - Strict, disease-focused
+  // BUILD SYSTEM PROMPT
   // ============================================================
   buildSystemPrompt(context, userProfile = {}, isResearcherQuery = false) {
     const disease = context?.disease || "the medical condition";
@@ -96,10 +96,19 @@ CITATION REQUIREMENTS — CRITICAL:
 - Each finding MUST cite a DIFFERENT paper using [1], [2], [3]... format
 - Do NOT cite the same paper number twice in keyFindings
 - Every paper provided MUST be referenced at least once somewhere in your response
-  (in keyFindings, researchInsights, or clinicalTrialsSummary)
-- Extract the SPECIFIC finding, statistic, or conclusion from each paper
-- Do NOT just repeat the paper title as a finding
-- Include real numbers when available: response rates, survival months, hazard ratios`;
+- You MUST include specific numbers from each paper when available
+- Format: "[Treatment/drug] showed [specific outcome with number] in [patient group] [citation]"
+- GOOD: "Domvanalimab + zimberelimab achieved ORR 53.8% and OS 17.1 months in PD-L1-high NSCLC [6]"
+- BAD: "Domvanalimab shows promising results [6]" — TOO VAGUE, NEVER DO THIS
+- If abstract has hazard ratio, response rate, survival months, or p-value, you MUST include it in the finding
+- Use the "Key outcome" field provided per paper as the core of your finding
+
+SAFETY CONSIDERATIONS RULES:
+- Safety notes MUST come ONLY from the provided papers
+- If a paper mentions specific adverse events, toxicities, or safety warnings, cite them with the paper number
+- Do NOT write generic safety statements from your training knowledge
+- If no safety data exists in the papers, state: "No specific safety data was reported in the provided studies"
+- Format: "According to paper [N], [specific safety finding from that paper]"`;
 
     if (isLifestyleQuery) {
       prompt += `
@@ -213,10 +222,11 @@ RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
           : "Summarise the most relevant clinical trials listed."
   }",
   "recommendations": [
-    "Evidence-based recommendation for ${disease} from the research"
+    "Evidence-based recommendation for ${disease} from the research — cite the paper"
   ],
   "safetyConsiderations": [
-    "Specific safety note relevant to ${disease} treatment or management"
+    "Safety note FROM THE PROVIDED PAPERS ONLY — cite with paper number like [1]",
+    "If no safety data in papers, write: No specific safety data reported in provided studies"
   ],
   "sourceSnippets": [
     {
@@ -234,7 +244,7 @@ RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
   }
 
   // ============================================================
-  // BUILD USER PROMPT - Rich but concise
+  // BUILD USER PROMPT
   // ============================================================
   buildUserPrompt(
     query,
@@ -253,7 +263,8 @@ RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
 
     const totalPapers = Math.min(publications.length, 8);
     prompt += `\nIMPORTANT: You have ${totalPapers} papers below. You MUST cite ALL of them.\n`;
-    prompt += `Generate one key finding per paper using [1] through [${totalPapers}].\n\n`;
+    prompt += `Generate one key finding per paper using [1] through [${totalPapers}].\n`;
+    prompt += `Use the "Key outcome" field as the core of your finding — include the number.\n\n`;
 
     prompt += `=== PAPERS (${publications.length}) ===\n`;
 
@@ -261,14 +272,19 @@ RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
       const authors = Array.isArray(pub.authors)
         ? pub.authors.slice(0, 3).join(", ")
         : "Unknown";
-      // ✅ Reduced abstract to 180 chars to save token space
+
+      // ✅ 350 chars — numbers often appear mid-abstract
       const abstract = pub.abstract
-        ? pub.abstract.substring(0, 180)
+        ? pub.abstract.substring(0, 350)
         : "No abstract";
+
+      // ✅ Extract specific outcome hint to guide the LLM
+      const outcomeHint = this._extractOutcomeHint(pub.abstract || "");
 
       prompt += `[${idx + 1}] ${pub.title || "Untitled"} (${pub.year || "N/A"})
 Authors: ${authors}
 Source: ${(pub.source || "").toUpperCase()}
+Key outcome: ${outcomeHint}
 Abstract: ${abstract}
 URL: ${pub.url || ""}
 
@@ -276,9 +292,9 @@ URL: ${pub.url || ""}
     });
 
     if (clinicalTrials.length > 0) {
-      // ✅ Reduced to 4 trials in prompt to save token space
+      // ✅ 3 trials to save token space
       prompt += `=== TRIALS (${clinicalTrials.length}) ===\n`;
-      clinicalTrials.slice(0, 4).forEach((trial, idx) => {
+      clinicalTrials.slice(0, 3).forEach((trial, idx) => {
         const locs = Array.isArray(trial.locations)
           ? trial.locations.slice(0, 2).join("; ")
           : "N/A";
@@ -301,9 +317,11 @@ URL: ${trial.url || ""}
 - Answer the query using ONLY the papers above
 - Generate one key finding per paper — cite [1] through [${totalPapers}]
 - Do NOT skip any paper — every paper needs at least one citation
-- Extract SPECIFIC findings: response rates, survival data, hazard ratios
-- Do NOT just repeat paper titles as findings
-- Keep sourceSnippets short — max 80 chars per snippet
+- Use the "Key outcome" field value in your finding
+- Include specific numbers: ORR %, OS months, HR values, p-values
+- Do NOT write "X shows promising results" — always include actual data from the abstract
+- For safetyConsiderations — ONLY use adverse events mentioned in the papers, cite the paper
+- If no safety data in papers: write "No specific safety data reported in the provided studies"
 - clinicalTrialsSummary must be a STRING (not array)
 - Return JSON ONLY`;
 
@@ -311,7 +329,73 @@ URL: ${trial.url || ""}
   }
 
   // ============================================================
-  // BUILD CHAT MESSAGES - Zero history pollution
+  // NEW: Extract key outcome hint from abstract
+  // ============================================================
+  _extractOutcomeHint(abstract) {
+    if (!abstract || abstract.length < 20) return "See abstract below";
+
+    const patterns = [
+      { regex: /\borr\s*(?:of|was|:)?\s*(\d+\.?\d*\s*%)/i, label: "ORR" },
+      {
+        regex: /response rate\s*(?:of|was|:)?\s*(\d+\.?\d*\s*%)/i,
+        label: "Response rate",
+      },
+      {
+        regex: /objective response rate\s*(?:of|was|:)?\s*(\d+\.?\d*\s*%)/i,
+        label: "ORR",
+      },
+      {
+        regex: /median os\s*(?:of|was|:)?\s*(\d+\.?\d*\s*months)/i,
+        label: "Median OS",
+      },
+      { regex: /overall survival.*?(\d+\.?\d*\s*months)/i, label: "OS" },
+      {
+        regex: /median pfs\s*(?:of|was|:)?\s*(\d+\.?\d*\s*months)/i,
+        label: "Median PFS",
+      },
+      {
+        regex: /progression.free survival.*?(\d+\.?\d*\s*months)/i,
+        label: "PFS",
+      },
+      { regex: /hazard ratio\s*(?:of|was|:)?\s*(\d+\.?\d*)/i, label: "HR" },
+      { regex: /\bhr\s*[=:]\s*(0?\.\d+)/i, label: "HR" },
+      { regex: /p\s*[<=>]\s*(0\.\d+)/i, label: "p-value" },
+      {
+        regex:
+          /(\d+\.?\d*\s*%)\s*(?:of patients|response|survival|pcr|pathologic)/i,
+        label: "Rate",
+      },
+      {
+        regex: /(\d+\.?\d*)\s*months.*?(?:survival|pfs|os)/i,
+        label: "Survival",
+      },
+      {
+        regex: /pathologic complete response.*?(\d+\.?\d*\s*%)/i,
+        label: "pCR",
+      },
+    ];
+
+    for (const { regex, label } of patterns) {
+      const match = abstract.match(regex);
+      if (match) {
+        return `${label}: ${match[1]}`;
+      }
+    }
+
+    // No number found — use first meaningful sentence
+    const sentences = abstract.split(".");
+    for (const sentence of sentences) {
+      const trimmed = sentence.trim();
+      if (trimmed.length > 30 && trimmed.length < 120) {
+        return trimmed;
+      }
+    }
+
+    return "See abstract below";
+  }
+
+  // ============================================================
+  // BUILD CHAT MESSAGES
   // ============================================================
   buildChatMessages(systemPrompt, conversationHistory = [], userPrompt) {
     const messages = [{ role: "system", content: systemPrompt }];
@@ -382,8 +466,7 @@ URL: ${trial.url || ""}
     try {
       const response = await this.chat(chatMessages, {
         temperature: 0.1,
-        // ✅ Increased from 1800 — 8 findings + snippets needs more tokens
-        max_tokens: 2500,
+        max_tokens: 2500, // ✅ increased for 8 findings + snippets
       });
 
       const structuredResponse = this.parseStructuredResponse(
@@ -435,7 +518,7 @@ URL: ${trial.url || ""}
         );
       }
 
-      // ✅ NEW: Repair truncated JSON before parsing
+      // ✅ Repair truncated JSON before parsing
       let jsonStr = jsonMatch[0];
       jsonStr = this._repairTruncatedJson(jsonStr);
 
@@ -443,7 +526,6 @@ URL: ${trial.url || ""}
       try {
         parsed = JSON.parse(jsonStr);
       } catch {
-        // ✅ Second attempt: extract individual fields from broken JSON
         console.warn("⚠️ JSON parse failed, attempting field extraction");
         parsed = this._extractFieldsFromText(text, publications);
       }
@@ -505,21 +587,18 @@ URL: ${trial.url || ""}
   _repairTruncatedJson(jsonStr) {
     try {
       JSON.parse(jsonStr);
-      return jsonStr; // Already valid
+      return jsonStr;
     } catch {
       let repaired = jsonStr.trim();
 
-      // Remove trailing incomplete string (cut mid-value by token limit)
       repaired = repaired.replace(/,?\s*"[^"]*$/, "");
       repaired = repaired.replace(/,\s*$/, "");
 
-      // Count unclosed brackets and close them
-      const opens    = (repaired.match(/\{/g) || []).length;
-      const closes   = (repaired.match(/\}/g) || []).length;
-      const openArr  = (repaired.match(/\[/g) || []).length;
+      const opens = (repaired.match(/\{/g) || []).length;
+      const closes = (repaired.match(/\}/g) || []).length;
+      const openArr = (repaired.match(/\[/g) || []).length;
       const closeArr = (repaired.match(/\]/g) || []).length;
 
-      // Close arrays before objects
       for (let i = 0; i < openArr - closeArr; i++) repaired += "]";
       for (let i = 0; i < opens - closes; i++) repaired += "}";
 
@@ -535,9 +614,11 @@ URL: ${trial.url || ""}
       const findingsMatch = text.match(/"keyFindings"\s*:\s*\[([\s\S]*?)\]/);
       const overviewMatch = text.match(/"conditionOverview"\s*:\s*"([^"]+)"/);
       const insightsMatch = text.match(/"researchInsights"\s*:\s*"([^"]+)"/);
-      const trialsMatch   = text.match(/"clinicalTrialsSummary"\s*:\s*"([^"]+)"/);
-      const recsMatch     = text.match(/"recommendations"\s*:\s*\[([\s\S]*?)\]/);
-      const safetyMatch   = text.match(/"safetyConsiderations"\s*:\s*\[([\s\S]*?)\]/);
+      const trialsMatch = text.match(/"clinicalTrialsSummary"\s*:\s*"([^"]+)"/);
+      const recsMatch = text.match(/"recommendations"\s*:\s*\[([\s\S]*?)\]/);
+      const safetyMatch = text.match(
+        /"safetyConsiderations"\s*:\s*\[([\s\S]*?)\]/,
+      );
 
       if (!findingsMatch && !overviewMatch) return null;
 
@@ -552,13 +633,19 @@ URL: ${trial.url || ""}
       };
 
       return {
-        conditionOverview:     overviewMatch ? overviewMatch[1] : "",
-        keyFindings:           parseArray(findingsMatch?.[1]).filter((f) => typeof f === "string"),
-        researchInsights:      insightsMatch ? insightsMatch[1] : "",
+        conditionOverview: overviewMatch ? overviewMatch[1] : "",
+        keyFindings: parseArray(findingsMatch?.[1]).filter(
+          (f) => typeof f === "string",
+        ),
+        researchInsights: insightsMatch ? insightsMatch[1] : "",
         clinicalTrialsSummary: trialsMatch ? trialsMatch[1] : "",
-        recommendations:       parseArray(recsMatch?.[1]).filter((r) => typeof r === "string"),
-        safetyConsiderations:  parseArray(safetyMatch?.[1]).filter((s) => typeof s === "string"),
-        sourceSnippets:        this.buildSourceSnippets(publications),
+        recommendations: parseArray(recsMatch?.[1]).filter(
+          (r) => typeof r === "string",
+        ),
+        safetyConsiderations: parseArray(safetyMatch?.[1]).filter(
+          (s) => typeof s === "string",
+        ),
+        sourceSnippets: this.buildSourceSnippets(publications),
       };
     } catch {
       return null;
@@ -599,7 +686,6 @@ URL: ${trial.url || ""}
             item.finding,
             item.content,
           ].filter((v) => typeof v === "string");
-
           if (candidates.length > 0) return candidates.join(": ");
           return Object.values(item)
             .filter((v) => typeof v === "string")
@@ -648,8 +734,12 @@ URL: ${trial.url || ""}
 
     const safety =
       publications.length > 0
-        ? [`Review safety information in paper [1] before making any medical decisions`]
-        : ["Always consult qualified healthcare professionals before making medical decisions"];
+        ? [
+            `Review safety information in paper [1] before making any medical decisions`,
+          ]
+        : [
+            "Always consult qualified healthcare professionals before making medical decisions",
+          ];
 
     const trialsText =
       clinicalTrials.length > 0
@@ -747,15 +837,16 @@ Only include entities explicitly mentioned. Empty arrays if none.`;
         temperature: 0.1,
         max_tokens: 300,
       });
-
       const match = (response.text || "").match(/\{[\s\S]*\}/);
       if (match) {
         const parsed = JSON.parse(match[0]);
         return {
-          diseases:   Array.isArray(parsed.diseases)   ? parsed.diseases   : [],
-          symptoms:   Array.isArray(parsed.symptoms)   ? parsed.symptoms   : [],
+          diseases: Array.isArray(parsed.diseases) ? parsed.diseases : [],
+          symptoms: Array.isArray(parsed.symptoms) ? parsed.symptoms : [],
           treatments: Array.isArray(parsed.treatments) ? parsed.treatments : [],
-          medications:Array.isArray(parsed.medications)? parsed.medications : [],
+          medications: Array.isArray(parsed.medications)
+            ? parsed.medications
+            : [],
           procedures: Array.isArray(parsed.procedures) ? parsed.procedures : [],
         };
       }
@@ -788,7 +879,6 @@ Standard term:`;
         temperature: 0.1,
         max_tokens: 30,
       });
-
       return (response.text || disease)
         .trim()
         .replace(/['"]/g, "")

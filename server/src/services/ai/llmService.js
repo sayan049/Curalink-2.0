@@ -9,9 +9,9 @@ class LLMService {
     this.client = ollamaConfig.getClient();
   }
 
-
+  // ============================================================
   // CORE: Generate text completion
-
+  // ============================================================
   async generate(prompt, options = {}) {
     try {
       const response = await this.client.chat.completions.create({
@@ -21,7 +21,6 @@ class LLMService {
         top_p: options.top_p ?? 0.9,
         max_tokens: options.max_tokens ?? 512,
       });
-
       return {
         text: response.choices[0]?.message?.content || "",
         tokensUsed: response.usage?.completion_tokens || 0,
@@ -33,8 +32,9 @@ class LLMService {
     }
   }
 
+  // ============================================================
   // CORE: Chat completion (multi-turn)
-
+  // ============================================================
   async chat(messages, options = {}) {
     try {
       const response = await this.client.chat.completions.create({
@@ -47,7 +47,6 @@ class LLMService {
         top_p: options.top_p ?? 0.9,
         max_tokens: options.max_tokens ?? 1000,
       });
-
       return {
         text: response.choices[0]?.message?.content || "",
         tokensUsed: response.usage?.completion_tokens || 0,
@@ -59,27 +58,25 @@ class LLMService {
     }
   }
 
-
+  // ============================================================
   // BUILD SYSTEM PROMPT - Strict, disease-focused
-
+  // ============================================================
   buildSystemPrompt(context, userProfile = {}, isResearcherQuery = false) {
     const disease = context?.disease || "the medical condition";
     const location = context?.location || userProfile?.location || null;
     const isLifestyleQuery = context?.isLifestyleQuery || false;
     const originalQuery = context?.originalQuery || "";
 
-    // ── Previous response entities for referent resolution 
     const prevEntities =
       Array.isArray(context?.responseEntities) &&
       context.responseEntities.length > 0
         ? context.responseEntities
         : [];
 
-    // ── Global fallback trial flags 
     const noLocalTrials = context?.noLocalTrials || false;
     const fallbackCount = context?.fallbackTrialCount || 0;
 
-    // ── Build base prompt 
+    // ── Base prompt ───────────────────────────────────────────────────────
     let prompt = `You are Curalink, a medical AI research assistant.
 
 ABSOLUTE RULES - NEVER VIOLATE:
@@ -92,9 +89,20 @@ ABSOLUTE RULES - NEVER VIOLATE:
 4. Each key finding MUST cite [1], [2], etc. from the provided papers
 5. clinicalTrialsSummary MUST be a single plain STRING — never an array
 6. Return ONLY valid JSON — no markdown, no text before or after the JSON
-7. sourceSnippets must use real direct quotes from the provided abstracts;
-8. NEVER fabricate or hallucinate findings not present in the papers`;
+7. sourceSnippets must use real direct quotes from the provided abstracts
+8. NEVER fabricate or hallucinate findings not present in the papers
 
+CITATION REQUIREMENTS — CRITICAL:
+- You MUST generate between 6 and 8 key findings
+- Each finding MUST cite a DIFFERENT paper using [1], [2], [3]... format
+- Do NOT cite the same paper number twice in keyFindings
+- Every paper provided MUST be referenced at least once somewhere in your response
+  (in keyFindings, researchInsights, or clinicalTrialsSummary)
+- Extract the SPECIFIC finding, statistic, or conclusion from each paper
+- Do NOT just repeat the paper title as a finding
+- Include real numbers when available: response rates, survival months, hazard ratios`;
+
+    // ── Lifestyle query honesty ───────────────────────────────────────────
     if (isLifestyleQuery) {
       prompt += `
 
@@ -110,9 +118,9 @@ IMPORTANT INSTRUCTIONS FOR THIS QUERY:
 - Do NOT cite papers about chemotherapy/immunotherapy as evidence about food safety`;
     }
 
-    // ── Low result count honesty
-if (context?.lowResultCount) {
-  prompt += `
+    // ── Low result count warning ──────────────────────────────────────────
+    if (context?.lowResultCount) {
+      prompt += `
 
 ⚠️  LOW RESULT WARNING: Only ${context.actualPaperCount} paper(s) were found.
 - Only cite findings from the ${context.actualPaperCount} paper(s) provided above
@@ -121,12 +129,11 @@ if (context?.lowResultCount) {
 - If the papers don't fully answer the question, say:
   "Limited research was found on this specific topic. The available evidence suggests..."
 - Never invent statistics, drug names, or outcomes not present in the provided abstracts`;
-}
+    }
 
-    // ── Location context 
+    // ── Location context ──────────────────────────────────────────────────
     if (location) {
       if (noLocalTrials && fallbackCount > 0) {
-        // ✅ No local trials found — global fallback is being shown
         prompt += `
 
 USER LOCATION: ${location}
@@ -137,7 +144,6 @@ In your clinicalTrialsSummary field you MUST explicitly state:
 The following global trials may still be relevant for reference: [brief summary of trials shown]"
 Do NOT pretend these are local trials.`;
       } else if (noLocalTrials && fallbackCount === 0) {
-        // ✅ No trials found anywhere
         prompt += `
 
 USER LOCATION: ${location}
@@ -147,7 +153,6 @@ In your clinicalTrialsSummary field you MUST state:
 "No clinical trials are currently available for ${disease}. 
 Consider checking ClinicalTrials.gov directly for the latest listings."`;
       } else {
-        // ✅ Local trials found — normal case
         prompt += `
 
 USER LOCATION: ${location}
@@ -156,7 +161,7 @@ Mention specific cities/regions when available.`;
       }
     }
 
-    // ── Researcher query flag
+    // ── Researcher query mode ─────────────────────────────────────────────
     if (isResearcherQuery) {
       prompt += `
 
@@ -167,7 +172,7 @@ RESEARCHER QUERY MODE:
 - Focus on who discovered/developed/pioneered what, not generic disease facts`;
     }
 
-    // ── Previous response entities for referent resolution
+    // ── Previous response entities for referent resolution ────────────────
     if (prevEntities.length > 0) {
       prompt += `
 
@@ -176,7 +181,7 @@ PREVIOUS RESPONSE MENTIONED: ${prevEntities.join(", ")}
 these are the likely referents from the previous answer)`;
     }
 
-    // ── Recent conversation topics 
+    // ── Recent conversation topics ────────────────────────────────────────
     if (
       Array.isArray(context?.previousQueries) &&
       context.previousQueries.length > 0
@@ -187,7 +192,9 @@ these are the likely referents from the previous answer)`;
 RECENT TOPICS: ${recent.join(" → ")}`;
     }
 
-    // ── JSON response template ────────────────────────────────────────────────
+    // ── JSON response template ────────────────────────────────────────────
+    // ✅ FIXED: Template now shows [1] through [8] not just [1][2][3]
+    // This trains the AI to generate findings for every paper
     prompt += `
 
 DISEASE IN FOCUS: "${disease}"
@@ -196,9 +203,14 @@ RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
 {
   "conditionOverview": "2-3 sentences about ${disease} relevant to the query. Be specific and factual.",
   "keyFindings": [
-    "Specific finding with data about ${disease} [1]",
-    "Another specific finding [2]",
-    "Third specific finding [3]"
+    "Specific finding with real data about ${disease} from paper 1 [1]",
+    "Specific finding with real data about ${disease} from paper 2 [2]",
+    "Specific finding with real data about ${disease} from paper 3 [3]",
+    "Specific finding with real data about ${disease} from paper 4 [4]",
+    "Specific finding with real data about ${disease} from paper 5 [5]",
+    "Specific finding with real data about ${disease} from paper 6 [6]",
+    "Add finding from paper 7 if available [7]",
+    "Add finding from paper 8 if available [8]"
   ],
   "researchInsights": "2-3 sentences analysing ${disease} research trends and gaps from the provided papers.",
   "clinicalTrialsSummary": "Single plain string — never an array. ${
@@ -231,9 +243,9 @@ RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
     return prompt;
   }
 
-
+  // ============================================================
   // BUILD USER PROMPT - Rich but concise
-  
+  // ============================================================
   buildUserPrompt(
     query,
     publications = [],
@@ -249,7 +261,13 @@ RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
       prompt += `NOT as generic disease findings.\n\n`;
     }
 
-    prompt += `\n=== PAPERS (${publications.length}) ===\n`;
+    // ✅ FIXED: Explicit instruction to cite every paper
+    // Previously had no such instruction — AI picked easiest 3 and stopped
+    const totalPapers = Math.min(publications.length, 8);
+    prompt += `\nIMPORTANT: You have ${totalPapers} papers below. You MUST cite ALL of them.\n`;
+    prompt += `Generate one key finding per paper using [1] through [${totalPapers}].\n\n`;
+
+    prompt += `=== PAPERS (${publications.length}) ===\n`;
 
     publications.slice(0, 8).forEach((pub, idx) => {
       const authors = Array.isArray(pub.authors)
@@ -289,29 +307,31 @@ URL: ${trial.url || ""}
       });
     }
 
+    // ✅ FIXED: Bottom instructions now explicitly require all papers cited
     prompt += `INSTRUCTIONS:
 - Answer the query using ONLY the papers above
-- Key findings must cite [number] from the paper list
+- Generate one key finding per paper — cite [1] through [${totalPapers}]
+- Do NOT skip any paper — every paper needs at least one citation
+- Extract SPECIFIC findings: response rates, survival data, hazard ratios
+- Do NOT just repeat paper titles as findings
 - clinicalTrialsSummary must be a STRING (not array)
 - Return JSON ONLY`;
 
     return prompt;
   }
 
-  
+  // ============================================================
   // BUILD CHAT MESSAGES - Zero history pollution
-
+  // ============================================================
   buildChatMessages(systemPrompt, conversationHistory = [], userPrompt) {
     const messages = [{ role: "system", content: systemPrompt }];
 
-    // ✅ Use last 4 turns (was 2) — needed for referent resolution
     const safeHistory = conversationHistory.slice(-4);
 
     safeHistory.forEach((msg) => {
       if (!msg?.content || !msg?.role) return;
       messages.push({
         role: msg.role === "assistant" ? "assistant" : "user",
-        // ✅ 300 chars (was 120) — drug names were being cut off
         content: String(msg.content).substring(0, 300),
       });
     });
@@ -320,9 +340,9 @@ URL: ${trial.url || ""}
     return messages;
   }
 
-  
+  // ============================================================
   // MAIN: Generate medical response
-
+  // ============================================================
   async generateMedicalResponse(
     query,
     context = {},
@@ -345,7 +365,6 @@ URL: ${trial.url || ""}
       query.toLowerCase().includes("expert") ||
       query.toLowerCase().includes("scientist");
 
-    // ✅ isSupplementQuery check moved to controller — use zero history if passed empty
     const systemPrompt = this.buildSystemPrompt(
       context,
       userProfile,
@@ -373,7 +392,7 @@ URL: ${trial.url || ""}
     try {
       const response = await this.chat(chatMessages, {
         temperature: 0.1,
-        max_tokens: 1800, // ✅ was 1000 — prevents JSON truncation on long responses
+        max_tokens: 1800,
       });
 
       const structuredResponse = this.parseStructuredResponse(
@@ -401,9 +420,9 @@ URL: ${trial.url || ""}
     }
   }
 
-  
+  // ============================================================
   // PARSE: Extract structured response from LLM output
-  
+  // ============================================================
   parseStructuredResponse(text, query, publications = [], clinicalTrials = []) {
     if (!text || typeof text !== "string") {
       return this.buildFallbackStructuredResponse(
@@ -415,7 +434,6 @@ URL: ${trial.url || ""}
     }
 
     try {
-      // Extract JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         return this.buildFallbackStructuredResponse(
@@ -428,7 +446,6 @@ URL: ${trial.url || ""}
 
       const parsed = JSON.parse(jsonMatch[0]);
 
-      // Fix clinicalTrialsSummary type
       if (Array.isArray(parsed.clinicalTrialsSummary)) {
         parsed.clinicalTrialsSummary = parsed.clinicalTrialsSummary.join(". ");
       }
@@ -438,7 +455,6 @@ URL: ${trial.url || ""}
           .trim();
       }
 
-      // Auto-build sourceSnippets if LLM didn't provide good ones
       const hasGoodSnippets =
         Array.isArray(parsed.sourceSnippets) &&
         parsed.sourceSnippets.length > 0 &&
@@ -454,9 +470,7 @@ URL: ${trial.url || ""}
         researchInsights: this.ensureString(parsed.researchInsights),
         clinicalTrialsSummary: this.ensureString(parsed.clinicalTrialsSummary),
         recommendations: this.ensureStringArray(parsed.recommendations),
-        safetyConsiderations: this.ensureStringArray(
-          parsed.safetyConsiderations,
-        ),
+        safetyConsiderations: this.ensureStringArray(parsed.safetyConsiderations),
         sourceSnippets: Array.isArray(parsed.sourceSnippets)
           ? parsed.sourceSnippets
           : [],
@@ -472,9 +486,9 @@ URL: ${trial.url || ""}
     }
   }
 
-  
+  // ============================================================
   // HELPERS: Type safety
-
+  // ============================================================
   ensureString(value) {
     if (!value) return "";
     if (typeof value === "string") return value;
@@ -496,7 +510,6 @@ URL: ${trial.url || ""}
       .map((item) => {
         if (typeof item === "string") return item;
         if (typeof item === "object" && item !== null) {
-          // Handle objects returned by LLM instead of strings
           const candidates = [
             item.title,
             item.description,
@@ -533,9 +546,9 @@ URL: ${trial.url || ""}
     }));
   }
 
-  
+  // ============================================================
   // FALLBACK: When LLM fails or returns bad data
- 
+  // ============================================================
   buildFallbackStructuredResponse(
     rawText,
     query,
@@ -631,9 +644,9 @@ URL: ${trial.url || ""}
     return { structuredResponse: structured, rawText, tokensUsed: 0 };
   }
 
- 
+  // ============================================================
   // ENTITY EXTRACTION
-  
+  // ============================================================
   async extractEntities(text) {
     if (!text || typeof text !== "string") {
       return {
@@ -667,9 +680,7 @@ Only include entities explicitly mentioned. Empty arrays if none.`;
           diseases: Array.isArray(parsed.diseases) ? parsed.diseases : [],
           symptoms: Array.isArray(parsed.symptoms) ? parsed.symptoms : [],
           treatments: Array.isArray(parsed.treatments) ? parsed.treatments : [],
-          medications: Array.isArray(parsed.medications)
-            ? parsed.medications
-            : [],
+          medications: Array.isArray(parsed.medications) ? parsed.medications : [],
           procedures: Array.isArray(parsed.procedures) ? parsed.procedures : [],
         };
       }
@@ -686,9 +697,9 @@ Only include entities explicitly mentioned. Empty arrays if none.`;
     };
   }
 
- 
+  // ============================================================
   // DISEASE NORMALIZATION
- 
+  // ============================================================
   async normalizeDisease(disease) {
     if (!disease || typeof disease !== "string") return disease;
 

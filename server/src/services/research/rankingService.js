@@ -446,13 +446,11 @@ class RankingService {
         "pulmonary fibrosis",
         "pulmonary hypertension",
         "idiopathic pulmonary",
-        // ✅ Corrigendum / correction notices
         "corrigendum",
         "erratum",
         "correction to",
         "publisher correction",
         "author correction",
-        // ✅ Predictor papers — these answer WHO responds, not WHAT treatment
         "as a predictor of",
         "predictor of response",
         "predictive biomarker",
@@ -497,7 +495,6 @@ class RankingService {
         "erratum",
         "in vitro",
       ],
-
       prognosis: [
         "in vitro",
         "in vivo",
@@ -532,7 +529,6 @@ class RankingService {
         "calpain pathway",
         "apoptosis in human",
         "synergizes with camptothecin",
-        // ✅ ADD:
         "corrigendum",
         "erratum",
         "drug delivery",
@@ -552,7 +548,6 @@ class RankingService {
         "erratum",
       ],
       access_cost: [
-        // ✅ ADD: Cost queries should not return lab papers
         "in vitro",
         "cell line",
         "mouse model",
@@ -562,11 +557,7 @@ class RankingService {
         "corrigendum",
         "erratum",
       ],
-      general: [
-        // ✅ ADD: Even general queries should not return corrections
-        "corrigendum",
-        "erratum",
-      ],
+      general: ["corrigendum", "erratum"],
     };
 
     this.intentAnswerSignals = {
@@ -613,7 +604,6 @@ class RankingService {
           "before targeted",
           "imaging protocol",
           "protocol study",
-          // ✅ Corrigendum
           "corrigendum to",
           "corrigendum:",
           "erratum to",
@@ -1029,7 +1019,6 @@ class RankingService {
         "state of the art",
         "overview of",
       ],
-      // ✅ Correction notices — always penalised
       correction_notice: [
         "corrigendum",
         "erratum",
@@ -1282,6 +1271,7 @@ class RankingService {
       "time to progression",
     ];
 
+    // ✅ EXPANDED: More diseases with subtype exactness
     this.subtypeExactness = {
       "lung cancer": {
         exact: ["nsclc", "non-small cell", "non-small-cell"],
@@ -1300,6 +1290,76 @@ class RankingService {
         partial: ["dementia", "cognitive"],
         exactBonus: 12,
         partialPenalty: -5,
+      },
+      // ✅ NEW: Breast cancer subtypes
+      "breast cancer": {
+        exact: [
+          "her2",
+          "triple negative",
+          "hormone receptor",
+          "er positive",
+          "hr positive",
+        ],
+        partial: ["male breast cancer"],
+        exactBonus: 12,
+        partialPenalty: -8,
+      },
+      // ✅ NEW: Leukemia subtypes
+      leukemia: {
+        exact: [
+          "aml",
+          "acute myeloid",
+          "cml",
+          "chronic myeloid",
+          "all",
+          "acute lymphoblastic",
+          "cll",
+          "chronic lymphocytic",
+        ],
+        partial: [],
+        exactBonus: 12,
+        partialPenalty: 0,
+      },
+      // ✅ NEW: Lymphoma subtypes
+      lymphoma: {
+        exact: [
+          "hodgkin",
+          "non-hodgkin",
+          "dlbcl",
+          "follicular",
+          "diffuse large",
+        ],
+        partial: [],
+        exactBonus: 10,
+        partialPenalty: 0,
+      },
+      // ✅ NEW: COPD vs Asthma separation
+      copd: {
+        exact: ["copd", "emphysema", "chronic obstructive"],
+        partial: ["asthma"],
+        exactBonus: 12,
+        partialPenalty: -8,
+      },
+      // ✅ NEW: Parkinson's vs Alzheimer's
+      "parkinson's disease": {
+        exact: ["parkinson", "parkinsonian", "dopamine", "levodopa"],
+        partial: ["alzheimer", "dementia"],
+        exactBonus: 12,
+        partialPenalty: -8,
+      },
+      // ✅ NEW: Type 2 diabetes specific
+      "type 2 diabetes": {
+        exact: ["type 2", "t2dm", "type 2 diabetes"],
+        partial: ["type 1", "t1dm"],
+        exactBonus: 15,
+        partialPenalty: -10,
+      },
+      // ✅ NEW: Type 1 diabetes specific
+      "type 1 diabetes": {
+        exact: ["type 1", "t1dm", "type 1 diabetes"],
+        partial: ["type 2", "t2dm"],
+        exactBonus: 15,
+        partialPenalty: -10,
       },
     };
 
@@ -1388,7 +1448,6 @@ class RankingService {
     };
 
     this.trialHardExclusionPatterns = [
-      // existing patterns...
       "cough suppression",
       "pain relief during",
       "bronchoscopy comfort",
@@ -1410,19 +1469,13 @@ class RankingService {
       "awareness among",
       "knowledge and attitude",
       "telerehabilitation within",
-
-      // ✅ ADD: Old immunomodulator trials that keep appearing
       "mycobacterium w in combination",
       "mycobacterium w combination",
-
-      // ✅ ADD: Survey and knowledge studies that are not treatment trials
       "survey among",
       "knowledge among",
       "attitude among",
       "practices among",
       "perception among",
-
-      // ✅ ADD: Completely unrelated procedural trials
       "intraoperative neuromonitoring",
       "surgical site infection prevention",
       "venous thromboembolism prophylaxis",
@@ -2108,7 +2161,6 @@ class RankingService {
       kathmandu: "nepal",
     };
 
-    // ✅ No-result signals in abstract/title
     this.abstractNoResultSignals = [
       "this study aims",
       "this trial aims",
@@ -2134,7 +2186,6 @@ class RankingService {
       "we plan to",
     ];
 
-    // ✅ Real result signals in abstract
     this.abstractRealResultSignals = [
       "we found",
       "we observed",
@@ -2179,7 +2230,6 @@ class RankingService {
       "identified significant",
     ];
 
-    // ✅ Regex patterns for real clinical numbers
     this.clinicalNumberPatterns = [
       /\d+\.?\d*\s*%/,
       /\d+\.?\d*\s*months/,
@@ -2197,7 +2247,6 @@ class RankingService {
       /\(\d+\.?\d*.*\d+\.?\d*\)/,
     ];
 
-    // ✅ OpenAlex concept-based intent validation
     this.intentConceptMap = {
       treatment_solutions: [
         "drug therapy",
@@ -2244,7 +2293,6 @@ class RankingService {
       ],
     };
 
-    // ✅ Predictor concepts — these identify WHO responds, not WHAT treatment works
     this.predictorConcepts = [
       "predictive biomarker",
       "patient selection",
@@ -2255,30 +2303,20 @@ class RankingService {
       "nomogram",
     ];
 
-    // ✅ Trial age limits per intent
-    // RECRUITING trials are never filtered by age
-    // Only old COMPLETED trials are filtered
     this.trialMaxAgeForIntent = {
-      // Active treatment queries — want recent trials
       treatment_solutions: 12,
       recent_research: 8,
       comparison: 10,
-      access_cost: 10, // ✅ Cost trials should be recent
-
-      // Safety/lifestyle — somewhat recent
-      safety_efficacy: 10, // ✅ Mycobacterium trial fixed
-      prevention: 12, // ✅ Prevention trials
-      side_effects: 15, // Safety data can be older
-
-      // Outcome queries — older trials have matured data
+      access_cost: 10,
+      safety_efficacy: 10,
+      prevention: 12,
+      side_effects: 15,
       prognosis: 15,
-      symptoms_diagnosis: 12, // ✅ Diagnostic trial guidelines
-      mechanism: 20, // ✅ Mechanism — no restriction
-
-      // Researcher and admin queries — show all
-      researchers: 20, // ✅ Not really trial-relevant
-      clinical_trials: 20, // ✅ User explicitly wants trials
-      general: 15, // ✅ Moderate default
+      symptoms_diagnosis: 12,
+      mechanism: 20,
+      researchers: 20,
+      clinical_trials: 20,
+      general: 15,
     };
   }
 
@@ -2293,71 +2331,91 @@ class RankingService {
     return !invalidators.some((inv) => text.includes(inv));
   }
 
-  // ✅ Safe year extraction from any date format
-  // Handles: "2021-03", "2021-03-15", "2021", null
   _extractYear(dateStr) {
     if (!dateStr) return null;
     const year = parseInt(dateStr.toString().substring(0, 4));
     return isNaN(year) ? null : year;
   }
 
-  // ✅ Check if abstract contains real results
+  // ✅ FIXED: _abstractHasRealAnswer now actually rejects papers
+  // with no result signals. Previously returned true at the end
+  // even when nothing was found, making the filter useless.
   _abstractHasRealAnswer(abstractLower, titleLower) {
+    // Too short to be meaningful
     if (abstractLower.length < 80) return false;
 
+    // Title contains correction/protocol signals → reject immediately
     const titleHasNoResult = this.abstractNoResultSignals.some((sig) =>
       titleLower.includes(sig),
     );
     if (titleHasNoResult) return false;
 
+    // Abstract contains future study / protocol signals → reject
     const abstractHasNoResult = this.abstractNoResultSignals.some((sig) =>
       abstractLower.includes(sig),
     );
     if (abstractHasNoResult) return false;
 
+    // ✅ Check for real result signals
     const hasResultSignal = this.abstractRealResultSignals.some((sig) =>
       abstractLower.includes(sig),
     );
     if (hasResultSignal) return true;
 
+    // ✅ Check for real clinical numbers
     const hasRealNumbers = this.clinicalNumberPatterns.some((pattern) =>
       pattern.test(abstractLower),
     );
     if (hasRealNumbers) return true;
 
-    return true;
+    // ✅ FIXED: Previously returned true here — now returns false
+    // If abstract has no result signals AND no clinical numbers,
+    // the paper has not reported results yet or is a review
+    // without quantitative data. For result-required intents, reject it.
+    // Exception: review articles often lack specific numbers
+    // but contain synthesis language — check for that
+    const REVIEW_SIGNALS = [
+      "systematic review",
+      "meta-analysis",
+      "we reviewed",
+      "we analyzed",
+      "we analysed",
+      "literature review",
+      "current evidence",
+      "overview of",
+      "pooled analysis",
+      "summarize",
+      "summarise",
+    ];
+    const isReview = REVIEW_SIGNALS.some((sig) => abstractLower.includes(sig));
+    if (isReview) return true;
+
+    // No result signals, no numbers, not a review → reject
+    return false;
   }
 
-  // ✅ Check for real clinical numbers (scoring bonus)
   _hasRealClinicalNumbers(abstractLower) {
     return this.clinicalNumberPatterns.some((pattern) =>
       pattern.test(abstractLower),
     );
   }
 
-  // ✅ OpenAlex concept-based intent validation
-  // Only runs for OpenAlex papers (concepts field present)
-  // Returns penalty multiplier: 1.0 = no penalty, 0.5 = penalised
   _getConceptPenalty(pub, intentType) {
     const concepts = pub.concepts || [];
-    if (concepts.length === 0) return 1.0; // PubMed — no concepts, no penalty
+    if (concepts.length === 0) return 1.0;
 
-    // For treatment_solutions, check if paper is a predictor paper
     if (intentType === "treatment_solutions") {
       const isPredictorPaper = concepts.some(
         (c) =>
           this.predictorConcepts.some((pc) => c.name.includes(pc)) &&
           c.score > 0.6,
       );
-
       const hasTreatmentConcept = concepts.some(
         (c) =>
           (this.intentConceptMap.treatment_solutions || []).some((tc) =>
             c.name.includes(tc),
           ) && c.score > 0.4,
       );
-
-      // Strong predictor signal with no treatment concept → penalty
       if (isPredictorPaper && !hasTreatmentConcept) {
         console.log(
           `   🔬 Concept: predictor paper (×0.5): "${pub.title?.substring(0, 50)}"`,
@@ -2583,26 +2641,19 @@ class RankingService {
     }));
 
     const MAX_AGE_FOR_INTENT = {
-      // Time-critical — treatments change fast
       treatment_solutions: 5,
       recent_research: 3,
       comparison: 5,
-      access_cost: 5, // ✅ Drug prices change fast
-
-      // Moderate — some older data still valid
+      access_cost: 5,
       side_effects: 7,
       prognosis: 7,
-      safety_efficacy: 8, // ✅ Supplement/lifestyle evidence
-      prevention: 8, // ✅ Prevention guidelines update
-      symptoms_diagnosis: 8, // ✅ Diagnostic criteria update
-
-      // Lenient — older evidence still valid
+      safety_efficacy: 8,
+      prevention: 8,
+      symptoms_diagnosis: 8,
       clinical_trials: 10,
-      researchers: 10, // ✅ Review papers can be older
-      general: 8, // ✅ Moderate default
-
-      // No restriction — molecular biology is stable
-      mechanism: null, // ✅ No age filter for mechanism
+      researchers: 10,
+      general: 8,
+      mechanism: null,
     };
 
     const maxAge = MAX_AGE_FOR_INTENT[intentType] ?? null;
@@ -2759,6 +2810,38 @@ class RankingService {
       return { ...pub, _rawScore: 0 };
     }
 
+    // ── Hard filter 6: Wrong cancer subtype — REMOVED not penalised ───────
+    // ✅ NEW: For lung cancer queries, SCLC papers are not relevant
+    // -20 penalty alone is not enough — we need a hard filter
+    // SCLC treatment is completely different from NSCLC treatment
+    // A paper specifically about SCLC should not appear for NSCLC queries
+    if (disease && diseaseLower) {
+      const subtypeConfig = this.subtypeExactness[diseaseLower];
+      if (subtypeConfig && subtypeConfig.partial.length > 0) {
+        const hasWrongSubtypeInTitle = subtypeConfig.partial.some((p) =>
+          titleLower.includes(p),
+        );
+        const hasRightSubtypeAnywhere = subtypeConfig.exact.some(
+          (e) => titleLower.includes(e) || abstractLower.includes(e),
+        );
+        const hasGeneralDiseaseInTitle = titleLower.includes(diseaseLower);
+
+        // Paper is specifically about wrong subtype
+        // AND does not mention correct subtype
+        // AND does not mention general disease name
+        if (
+          hasWrongSubtypeInTitle &&
+          !hasRightSubtypeAnywhere &&
+          !hasGeneralDiseaseInTitle
+        ) {
+          console.log(
+            `   🚫 Wrong subtype hard filter: "${pub.title.substring(0, 60)}"`,
+          );
+          return { ...pub, _rawScore: 0 };
+        }
+      }
+    }
+
     // ── Keyword penalty ───────────────────────────────────────────────────
     const negativeAbstract = answerSignals.negativeAbstract || [];
     const disqualifiers = this.intentDisqualifiers[intentType] || [];
@@ -2815,8 +2898,6 @@ class RankingService {
     }
 
     // ── Factor 0.55: Retrospective penalty for treatment queries ──────────
-    // ✅ NEW: For treatment queries, retrospective studies are weak evidence
-    // We want Phase 3 RCTs and meta-analyses, not chart reviews
     if (intentType === "treatment_solutions" && evidenceTier.tier === 6) {
       score = Math.floor(score * 0.7);
       console.log(
@@ -3057,12 +3138,8 @@ class RankingService {
     const queryTokens = this.tokenize(query);
     const diseaseTokens = disease ? this.tokenize(disease) : [];
     const location = context.location || null;
-
-    // ✅ FIX: Use passed intent OR fall back to context intent
     const intentType = intent?.type || context._intent?.type || "general";
     const currentYear = new Date().getFullYear();
-
-    // ✅ Trial age limit for this intent
     const trialMaxAge = this.trialMaxAgeForIntent[intentType] ?? 20;
 
     const taggedTrials = location
@@ -3133,9 +3210,6 @@ class RankingService {
           if (trial.relevanceScore <= 0) return false;
         }
 
-        // ✅ NEW: Age filter for old completed trials
-        // RECRUITING trials are never age-filtered
-        // Only very old COMPLETED trials are removed
         if (trial.status === "COMPLETED" && trial.startDate) {
           const startYear = this._extractYear(trial.startDate);
           if (startYear !== null) {
@@ -3339,7 +3413,6 @@ class RankingService {
     });
   }
 
-  // ✅ Updated _scoreTrial — now receives intentType directly
   _scoreTrial(
     trial,
     queryTokens,

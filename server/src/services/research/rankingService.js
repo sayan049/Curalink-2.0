@@ -1271,7 +1271,6 @@ class RankingService {
       "time to progression",
     ];
 
-    // ✅ EXPANDED: More diseases with subtype exactness
     this.subtypeExactness = {
       "lung cancer": {
         exact: ["nsclc", "non-small cell", "non-small-cell"],
@@ -1291,7 +1290,6 @@ class RankingService {
         exactBonus: 12,
         partialPenalty: -5,
       },
-      // ✅ NEW: Breast cancer subtypes
       "breast cancer": {
         exact: [
           "her2",
@@ -1304,7 +1302,6 @@ class RankingService {
         exactBonus: 12,
         partialPenalty: -8,
       },
-      // ✅ NEW: Leukemia subtypes
       leukemia: {
         exact: [
           "aml",
@@ -1320,7 +1317,6 @@ class RankingService {
         exactBonus: 12,
         partialPenalty: 0,
       },
-      // ✅ NEW: Lymphoma subtypes
       lymphoma: {
         exact: [
           "hodgkin",
@@ -1333,28 +1329,24 @@ class RankingService {
         exactBonus: 10,
         partialPenalty: 0,
       },
-      // ✅ NEW: COPD vs Asthma separation
       copd: {
         exact: ["copd", "emphysema", "chronic obstructive"],
         partial: ["asthma"],
         exactBonus: 12,
         partialPenalty: -8,
       },
-      // ✅ NEW: Parkinson's vs Alzheimer's
       "parkinson's disease": {
         exact: ["parkinson", "parkinsonian", "dopamine", "levodopa"],
         partial: ["alzheimer", "dementia"],
         exactBonus: 12,
         partialPenalty: -8,
       },
-      // ✅ NEW: Type 2 diabetes specific
       "type 2 diabetes": {
         exact: ["type 2", "t2dm", "type 2 diabetes"],
         partial: ["type 1", "t1dm"],
         exactBonus: 15,
         partialPenalty: -10,
       },
-      // ✅ NEW: Type 1 diabetes specific
       "type 1 diabetes": {
         exact: ["type 1", "t1dm", "type 1 diabetes"],
         partial: ["type 2", "t2dm"],
@@ -2337,43 +2329,29 @@ class RankingService {
     return isNaN(year) ? null : year;
   }
 
-  // ✅ FIXED: _abstractHasRealAnswer now actually rejects papers
-  // with no result signals. Previously returned true at the end
-  // even when nothing was found, making the filter useless.
   _abstractHasRealAnswer(abstractLower, titleLower) {
-    // Too short to be meaningful
     if (abstractLower.length < 80) return false;
 
-    // Title contains correction/protocol signals → reject immediately
     const titleHasNoResult = this.abstractNoResultSignals.some((sig) =>
       titleLower.includes(sig),
     );
     if (titleHasNoResult) return false;
 
-    // Abstract contains future study / protocol signals → reject
     const abstractHasNoResult = this.abstractNoResultSignals.some((sig) =>
       abstractLower.includes(sig),
     );
     if (abstractHasNoResult) return false;
 
-    // ✅ Check for real result signals
     const hasResultSignal = this.abstractRealResultSignals.some((sig) =>
       abstractLower.includes(sig),
     );
     if (hasResultSignal) return true;
 
-    // ✅ Check for real clinical numbers
     const hasRealNumbers = this.clinicalNumberPatterns.some((pattern) =>
       pattern.test(abstractLower),
     );
     if (hasRealNumbers) return true;
 
-    // ✅ FIXED: Previously returned true here — now returns false
-    // If abstract has no result signals AND no clinical numbers,
-    // the paper has not reported results yet or is a review
-    // without quantitative data. For result-required intents, reject it.
-    // Exception: review articles often lack specific numbers
-    // but contain synthesis language — check for that
     const REVIEW_SIGNALS = [
       "systematic review",
       "meta-analysis",
@@ -2390,7 +2368,6 @@ class RankingService {
     const isReview = REVIEW_SIGNALS.some((sig) => abstractLower.includes(sig));
     if (isReview) return true;
 
-    // No result signals, no numbers, not a review → reject
     return false;
   }
 
@@ -2810,11 +2787,13 @@ class RankingService {
       return { ...pub, _rawScore: 0 };
     }
 
-    // ── Hard filter 6: Wrong cancer subtype — REMOVED not penalised ───────
-    // ✅ NEW: For lung cancer queries, SCLC papers are not relevant
-    // -20 penalty alone is not enough — we need a hard filter
-    // SCLC treatment is completely different from NSCLC treatment
-    // A paper specifically about SCLC should not appear for NSCLC queries
+    // ── Hard filter 6: Wrong cancer subtype ───────────────────────────────
+    // ✅ FIXED: "small cell lung cancer" contains "lung cancer" as a substring
+    // Previous version incorrectly let SCLC papers through because
+    // hasGeneralDiseaseInTitle was true (lung cancer IS in the title
+    // but only as part of "small cell lung cancer")
+    // Fix: Strip all wrong subtype phrases from title first,
+    // then check if general disease name STILL appears standalone
     if (disease && diseaseLower) {
       const subtypeConfig = this.subtypeExactness[diseaseLower];
       if (subtypeConfig && subtypeConfig.partial.length > 0) {
@@ -2824,15 +2803,21 @@ class RankingService {
         const hasRightSubtypeAnywhere = subtypeConfig.exact.some(
           (e) => titleLower.includes(e) || abstractLower.includes(e),
         );
-        const hasGeneralDiseaseInTitle = titleLower.includes(diseaseLower);
 
-        // Paper is specifically about wrong subtype
-        // AND does not mention correct subtype
-        // AND does not mention general disease name
+        // Strip wrong subtype phrases then check if disease appears standalone
+        const generalDiseaseStandalone = (() => {
+          if (!titleLower.includes(diseaseLower)) return false;
+          let stripped = titleLower;
+          subtypeConfig.partial.forEach((p) => {
+            stripped = stripped.split(p).join(" ");
+          });
+          return stripped.includes(diseaseLower);
+        })();
+
         if (
           hasWrongSubtypeInTitle &&
           !hasRightSubtypeAnywhere &&
-          !hasGeneralDiseaseInTitle
+          !generalDiseaseStandalone
         ) {
           console.log(
             `   🚫 Wrong subtype hard filter: "${pub.title.substring(0, 60)}"`,
@@ -2883,11 +2868,11 @@ class RankingService {
 
     let score = 0;
 
-    // ── Factor 0: Paper type bonus (0–25 pts) ─────────────────────────────
+    // ── Factor 0: Paper type bonus ────────────────────────────────────────
     if (paperType.isPreferred) score += 25;
     else if (!paperType.isPenalised) score += 10;
 
-    // ── Factor 0.5: Evidence hierarchy (0–40 pts) ─────────────────────────
+    // ── Factor 0.5: Evidence hierarchy ───────────────────────────────────
     const evidenceTier = this._getEvidenceTier(titleLower, abstractLower);
     score += evidenceTier.tierScore;
     if (evidenceTier.tier <= 2) {
@@ -2901,11 +2886,11 @@ class RankingService {
     if (intentType === "treatment_solutions" && evidenceTier.tier === 6) {
       score = Math.floor(score * 0.7);
       console.log(
-        `   📉 Retrospective penalty ×0.7 for treatment query: "${pub.title.substring(0, 50)}"`,
+        `   📉 Retrospective penalty ×0.7: "${pub.title.substring(0, 50)}"`,
       );
     }
 
-    // ── Factor 0.6: Clinical endpoint signals (0–30 pts) ──────────────────
+    // ── Factor 0.6: Clinical endpoint signals ────────────────────────────
     const endpoints = this._countClinicalEndpoints(titleLower, abstractLower);
     score += Math.min(20, endpoints.titleHits * 12);
     score += Math.min(10, endpoints.abstractHits * 2);
@@ -2915,7 +2900,7 @@ class RankingService {
       );
     }
 
-    // ── Factor 0.7: Subtype exactness (+20 / -20 pts) ─────────────────────
+    // ── Factor 0.7: Subtype exactness ────────────────────────────────────
     const subtypeBonus = this._getSubtypeExactnessBonus(
       titleLower,
       abstractLower,
@@ -2928,7 +2913,7 @@ class RankingService {
       );
     }
 
-    // ── Factor 0.8: Real clinical numbers bonus (+20 pts) ─────────────────
+    // ── Factor 0.8: Real clinical numbers bonus ───────────────────────────
     if (this._hasRealClinicalNumbers(abstractLower)) {
       score += 20;
       console.log(
@@ -2936,7 +2921,7 @@ class RankingService {
       );
     }
 
-    // ── Factor 1: Positive answer signal bonus (0–30 pts) ─────────────────
+    // ── Factor 1: Positive answer signal bonus ────────────────────────────
     const positiveSignals = answerSignals.positive || [];
     if (positiveSignals.length > 0) {
       const titlePosHits = positiveSignals.filter((sig) =>
@@ -2954,7 +2939,7 @@ class RankingService {
       }
     }
 
-    // ── Factor 2: Solution match (0–50 pts) ───────────────────────────────
+    // ── Factor 2: Solution match ──────────────────────────────────────────
     const kwList = Array.isArray(solutionKws) ? solutionKws : [];
     if (kwList.length > 0) {
       const titleMatches = kwList.filter((kw) =>
@@ -2978,7 +2963,7 @@ class RankingService {
       if (titleMatches >= 1 && diseaseInTitle) score += 10;
     }
 
-    // ── Factor 3: Disease relevance (0–45 pts) ────────────────────────────
+    // ── Factor 3: Disease relevance ───────────────────────────────────────
     if (disease && diseaseTokens.length > 0) {
       if (titleLower.includes(diseaseLower)) {
         score += 45;
@@ -3000,7 +2985,7 @@ class RankingService {
       }
     }
 
-    // ── Factor 3.5: Synonym bonus (0–15 pts) ─────────────────────────────
+    // ── Factor 3.5: Synonym bonus ─────────────────────────────────────────
     if (disease) {
       const synonyms = this.diseaseSynonyms[diseaseLower] || [];
       if (synonyms.length > 0) {
@@ -3019,7 +3004,7 @@ class RankingService {
       }
     }
 
-    // ── Factor 4: Query relevance (0–25 pts) ──────────────────────────────
+    // ── Factor 4: Query relevance ─────────────────────────────────────────
     if (queryTokens.length > 0) {
       score += Math.min(
         18,
@@ -3033,7 +3018,7 @@ class RankingService {
       );
     }
 
-    // ── Factor 4.5: Exact query phrase match (0–30 pts) ───────────────────
+    // ── Factor 4.5: Exact query phrase match ──────────────────────────────
     if (queryTokens.length >= 2) {
       const queryPhrase = queryTokens.join(" ");
 
@@ -3071,7 +3056,7 @@ class RankingService {
       }
     }
 
-    // ── Factor 5: Publication type (0–15 pts) ─────────────────────────────
+    // ── Factor 5: Publication type ────────────────────────────────────────
     for (const [type, weight] of Object.entries(this.publicationTypeWeights)) {
       if (combined.includes(type)) {
         score += weight;
@@ -3079,7 +3064,7 @@ class RankingService {
       }
     }
 
-    // ── Factor 6: Recency (0–20 pts) ──────────────────────────────────────
+    // ── Factor 6: Recency ─────────────────────────────────────────────────
     const age = currentYear - (pub.year || currentYear);
     if (age === 0) score += 20;
     else if (age === 1) score += 18;
@@ -3088,14 +3073,14 @@ class RankingService {
     else if (age <= 5) score += 8;
     else if (age <= 7) score += 0;
 
-    // ── Factor 7: Source credibility (0–15 pts) ───────────────────────────
+    // ── Factor 7: Source credibility ─────────────────────────────────────
     if (pub.source === "pubmed") score += 10;
     else if (pub.source === "openalex") score += 7;
     if (this.highImpactJournals.has(journalLower)) score += 5;
     else if ([...this.highImpactJournals].some((j) => journalLower.includes(j)))
       score += 3;
 
-    // ── Factor 8: Citation impact (0–15 pts) ──────────────────────────────
+    // ── Factor 8: Citation impact ─────────────────────────────────────────
     const citations = pub.citationCount || 0;
     if (citations >= 1000) score += 15;
     else if (citations >= 500) score += 12;
@@ -3104,13 +3089,13 @@ class RankingService {
     else if (citations >= 10) score += 3;
     else if (citations > 0) score += 1;
 
-    // ── Factor 9: Abstract quality (0–5 pts) ──────────────────────────────
+    // ── Factor 9: Abstract quality ────────────────────────────────────────
     const absLen = abstractLower.length;
     if (absLen > 400) score += 5;
     else if (absLen > 200) score += 3;
     else if (absLen > 80) score += 1;
 
-    // ── Factor 10: Author count (0–3 pts) ─────────────────────────────────
+    // ── Factor 10: Author count ───────────────────────────────────────────
     const ac = pub.authors?.length || 0;
     if (ac >= 5) score += 3;
     else if (ac >= 3) score += 2;
@@ -3463,7 +3448,7 @@ class RankingService {
       }
     }
 
-    // ── Factor 2: Disease match (0–58 pts) ────────────────────────────────
+    // ── Factor 2: Disease match ───────────────────────────────────────────
     if (disease && diseaseTokens.length > 0) {
       const synonyms = this.diseaseSynonyms[diseaseLower] || [];
 

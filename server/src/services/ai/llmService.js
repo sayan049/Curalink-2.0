@@ -76,7 +76,6 @@ class LLMService {
     const noLocalTrials = context?.noLocalTrials || false;
     const fallbackCount = context?.fallbackTrialCount || 0;
 
-    // ── Base prompt ───────────────────────────────────────────────────────
     let prompt = `You are Curalink, a medical AI research assistant.
 
 ABSOLUTE RULES - NEVER VIOLATE:
@@ -102,7 +101,6 @@ CITATION REQUIREMENTS — CRITICAL:
 - Do NOT just repeat the paper title as a finding
 - Include real numbers when available: response rates, survival months, hazard ratios`;
 
-    // ── Lifestyle query honesty ───────────────────────────────────────────
     if (isLifestyleQuery) {
       prompt += `
 
@@ -118,7 +116,6 @@ IMPORTANT INSTRUCTIONS FOR THIS QUERY:
 - Do NOT cite papers about chemotherapy/immunotherapy as evidence about food safety`;
     }
 
-    // ── Low result count warning ──────────────────────────────────────────
     if (context?.lowResultCount) {
       prompt += `
 
@@ -131,7 +128,6 @@ IMPORTANT INSTRUCTIONS FOR THIS QUERY:
 - Never invent statistics, drug names, or outcomes not present in the provided abstracts`;
     }
 
-    // ── Location context ──────────────────────────────────────────────────
     if (location) {
       if (noLocalTrials && fallbackCount > 0) {
         prompt += `
@@ -161,7 +157,6 @@ Mention specific cities/regions when available.`;
       }
     }
 
-    // ── Researcher query mode ─────────────────────────────────────────────
     if (isResearcherQuery) {
       prompt += `
 
@@ -172,7 +167,6 @@ RESEARCHER QUERY MODE:
 - Focus on who discovered/developed/pioneered what, not generic disease facts`;
     }
 
-    // ── Previous response entities for referent resolution ────────────────
     if (prevEntities.length > 0) {
       prompt += `
 
@@ -181,7 +175,6 @@ PREVIOUS RESPONSE MENTIONED: ${prevEntities.join(", ")}
 these are the likely referents from the previous answer)`;
     }
 
-    // ── Recent conversation topics ────────────────────────────────────────
     if (
       Array.isArray(context?.previousQueries) &&
       context.previousQueries.length > 0
@@ -192,9 +185,6 @@ these are the likely referents from the previous answer)`;
 RECENT TOPICS: ${recent.join(" → ")}`;
     }
 
-    // ── JSON response template ────────────────────────────────────────────
-    // ✅ FIXED: Template now shows [1] through [8] not just [1][2][3]
-    // This trains the AI to generate findings for every paper
     prompt += `
 
 DISEASE IN FOCUS: "${disease}"
@@ -235,7 +225,7 @@ RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
       "year": 2024,
       "platform": "PUBMED",
       "url": "https://pubmed.ncbi.nlm.nih.gov/...",
-      "snippet": "direct quote from abstract max 120 chars"
+      "snippet": "direct quote from abstract max 80 chars"
     }
   ]
 }`;
@@ -261,8 +251,6 @@ RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
       prompt += `NOT as generic disease findings.\n\n`;
     }
 
-    // ✅ FIXED: Explicit instruction to cite every paper
-    // Previously had no such instruction — AI picked easiest 3 and stopped
     const totalPapers = Math.min(publications.length, 8);
     prompt += `\nIMPORTANT: You have ${totalPapers} papers below. You MUST cite ALL of them.\n`;
     prompt += `Generate one key finding per paper using [1] through [${totalPapers}].\n\n`;
@@ -273,8 +261,9 @@ RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
       const authors = Array.isArray(pub.authors)
         ? pub.authors.slice(0, 3).join(", ")
         : "Unknown";
+      // ✅ Reduced abstract to 180 chars to save token space
       const abstract = pub.abstract
-        ? pub.abstract.substring(0, 220)
+        ? pub.abstract.substring(0, 180)
         : "No abstract";
 
       prompt += `[${idx + 1}] ${pub.title || "Untitled"} (${pub.year || "N/A"})
@@ -287,8 +276,9 @@ URL: ${pub.url || ""}
     });
 
     if (clinicalTrials.length > 0) {
+      // ✅ Reduced to 4 trials in prompt to save token space
       prompt += `=== TRIALS (${clinicalTrials.length}) ===\n`;
-      clinicalTrials.slice(0, 6).forEach((trial, idx) => {
+      clinicalTrials.slice(0, 4).forEach((trial, idx) => {
         const locs = Array.isArray(trial.locations)
           ? trial.locations.slice(0, 2).join("; ")
           : "N/A";
@@ -307,13 +297,13 @@ URL: ${trial.url || ""}
       });
     }
 
-    // ✅ FIXED: Bottom instructions now explicitly require all papers cited
     prompt += `INSTRUCTIONS:
 - Answer the query using ONLY the papers above
 - Generate one key finding per paper — cite [1] through [${totalPapers}]
 - Do NOT skip any paper — every paper needs at least one citation
 - Extract SPECIFIC findings: response rates, survival data, hazard ratios
 - Do NOT just repeat paper titles as findings
+- Keep sourceSnippets short — max 80 chars per snippet
 - clinicalTrialsSummary must be a STRING (not array)
 - Return JSON ONLY`;
 
@@ -392,7 +382,8 @@ URL: ${trial.url || ""}
     try {
       const response = await this.chat(chatMessages, {
         temperature: 0.1,
-        max_tokens: 1800,
+        // ✅ Increased from 1800 — 8 findings + snippets needs more tokens
+        max_tokens: 2500,
       });
 
       const structuredResponse = this.parseStructuredResponse(
@@ -444,7 +435,27 @@ URL: ${trial.url || ""}
         );
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
+      // ✅ NEW: Repair truncated JSON before parsing
+      let jsonStr = jsonMatch[0];
+      jsonStr = this._repairTruncatedJson(jsonStr);
+
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        // ✅ Second attempt: extract individual fields from broken JSON
+        console.warn("⚠️ JSON parse failed, attempting field extraction");
+        parsed = this._extractFieldsFromText(text, publications);
+      }
+
+      if (!parsed) {
+        return this.buildFallbackStructuredResponse(
+          text,
+          query,
+          publications,
+          clinicalTrials,
+        );
+      }
 
       if (Array.isArray(parsed.clinicalTrialsSummary)) {
         parsed.clinicalTrialsSummary = parsed.clinicalTrialsSummary.join(". ");
@@ -470,19 +481,87 @@ URL: ${trial.url || ""}
         researchInsights: this.ensureString(parsed.researchInsights),
         clinicalTrialsSummary: this.ensureString(parsed.clinicalTrialsSummary),
         recommendations: this.ensureStringArray(parsed.recommendations),
-        safetyConsiderations: this.ensureStringArray(parsed.safetyConsiderations),
+        safetyConsiderations: this.ensureStringArray(
+          parsed.safetyConsiderations,
+        ),
         sourceSnippets: Array.isArray(parsed.sourceSnippets)
           ? parsed.sourceSnippets
           : [],
       };
     } catch (parseError) {
-      console.warn("⚠️ JSON parse failed, using fallback");
+      console.warn("⚠️ JSON parse failed completely, using fallback");
       return this.buildFallbackStructuredResponse(
         text,
         query,
         publications,
         clinicalTrials,
       );
+    }
+  }
+
+  // ============================================================
+  // NEW: Repair truncated JSON from token limit cutoff
+  // ============================================================
+  _repairTruncatedJson(jsonStr) {
+    try {
+      JSON.parse(jsonStr);
+      return jsonStr; // Already valid
+    } catch {
+      let repaired = jsonStr.trim();
+
+      // Remove trailing incomplete string (cut mid-value by token limit)
+      repaired = repaired.replace(/,?\s*"[^"]*$/, "");
+      repaired = repaired.replace(/,\s*$/, "");
+
+      // Count unclosed brackets and close them
+      const opens    = (repaired.match(/\{/g) || []).length;
+      const closes   = (repaired.match(/\}/g) || []).length;
+      const openArr  = (repaired.match(/\[/g) || []).length;
+      const closeArr = (repaired.match(/\]/g) || []).length;
+
+      // Close arrays before objects
+      for (let i = 0; i < openArr - closeArr; i++) repaired += "]";
+      for (let i = 0; i < opens - closes; i++) repaired += "}";
+
+      return repaired;
+    }
+  }
+
+  // ============================================================
+  // NEW: Extract individual fields from badly broken JSON
+  // ============================================================
+  _extractFieldsFromText(text, publications = []) {
+    try {
+      const findingsMatch = text.match(/"keyFindings"\s*:\s*\[([\s\S]*?)\]/);
+      const overviewMatch = text.match(/"conditionOverview"\s*:\s*"([^"]+)"/);
+      const insightsMatch = text.match(/"researchInsights"\s*:\s*"([^"]+)"/);
+      const trialsMatch   = text.match(/"clinicalTrialsSummary"\s*:\s*"([^"]+)"/);
+      const recsMatch     = text.match(/"recommendations"\s*:\s*\[([\s\S]*?)\]/);
+      const safetyMatch   = text.match(/"safetyConsiderations"\s*:\s*\[([\s\S]*?)\]/);
+
+      if (!findingsMatch && !overviewMatch) return null;
+
+      const parseArray = (matchStr) => {
+        if (!matchStr) return [];
+        try {
+          return JSON.parse(`[${matchStr}]`);
+        } catch {
+          const matches = matchStr.match(/"([^"]+)"/g) || [];
+          return matches.map((m) => m.replace(/^"|"$/g, ""));
+        }
+      };
+
+      return {
+        conditionOverview:     overviewMatch ? overviewMatch[1] : "",
+        keyFindings:           parseArray(findingsMatch?.[1]).filter((f) => typeof f === "string"),
+        researchInsights:      insightsMatch ? insightsMatch[1] : "",
+        clinicalTrialsSummary: trialsMatch ? trialsMatch[1] : "",
+        recommendations:       parseArray(recsMatch?.[1]).filter((r) => typeof r === "string"),
+        safetyConsiderations:  parseArray(safetyMatch?.[1]).filter((s) => typeof s === "string"),
+        sourceSnippets:        this.buildSourceSnippets(publications),
+      };
+    } catch {
+      return null;
     }
   }
 
@@ -541,7 +620,7 @@ URL: ${trial.url || ""}
       platform: (pub.source || "unknown").toUpperCase(),
       url: pub.url || "",
       snippet: pub.abstract
-        ? pub.abstract.substring(0, 130)
+        ? pub.abstract.substring(0, 80)
         : "No abstract available",
     }));
   }
@@ -569,12 +648,8 @@ URL: ${trial.url || ""}
 
     const safety =
       publications.length > 0
-        ? [
-            `Review safety information in paper [1] before making any medical decisions`,
-          ]
-        : [
-            "Always consult qualified healthcare professionals before making medical decisions",
-          ];
+        ? [`Review safety information in paper [1] before making any medical decisions`]
+        : ["Always consult qualified healthcare professionals before making medical decisions"];
 
     const trialsText =
       clinicalTrials.length > 0
@@ -677,10 +752,10 @@ Only include entities explicitly mentioned. Empty arrays if none.`;
       if (match) {
         const parsed = JSON.parse(match[0]);
         return {
-          diseases: Array.isArray(parsed.diseases) ? parsed.diseases : [],
-          symptoms: Array.isArray(parsed.symptoms) ? parsed.symptoms : [],
+          diseases:   Array.isArray(parsed.diseases)   ? parsed.diseases   : [],
+          symptoms:   Array.isArray(parsed.symptoms)   ? parsed.symptoms   : [],
           treatments: Array.isArray(parsed.treatments) ? parsed.treatments : [],
-          medications: Array.isArray(parsed.medications) ? parsed.medications : [],
+          medications:Array.isArray(parsed.medications)? parsed.medications : [],
           procedures: Array.isArray(parsed.procedures) ? parsed.procedures : [],
         };
       }

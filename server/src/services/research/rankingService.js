@@ -467,19 +467,63 @@ class RankingService {
         "body composition",
         "nutritional status as",
       ],
-      recent_research: [],
+      recent_research: [
+        "corrigendum",
+        "erratum",
+        "correction to",
+        "drug delivery",
+        "nanoparticle",
+        "chitosan",
+        "liposome",
+      ],
       clinical_trials: [],
-      prevention: [],
+      prevention: [
+        "machine learning",
+        "drug delivery",
+        "nanoparticle",
+        "in vitro",
+        "cell line",
+        "corrigendum",
+        "erratum",
+      ],
       mechanism: [],
-      symptoms_diagnosis: [],
-      prognosis: [],
-      side_effects: [],
+      symptoms_diagnosis: [
+        "machine learning",
+        "deep learning",
+        "neural network",
+        "drug delivery",
+        "nanoparticle",
+        "corrigendum",
+        "erratum",
+        "in vitro",
+      ],
+
+      prognosis: [
+        "in vitro",
+        "in vivo",
+        "cell line",
+        "mouse model",
+        "murine",
+        "drug delivery",
+        "nanoparticle",
+        "corrigendum",
+        "erratum",
+      ],
+      side_effects: [
+        "machine learning",
+        "prediction model",
+        "drug delivery",
+        "nanoparticle",
+        "in vitro",
+        "cell line",
+        "corrigendum",
+        "erratum",
+      ],
       researchers: [],
       safety_efficacy: [
         "risk factor for cancer",
         "risk factors for cancer",
         "narrative review of risk factors",
-        "incp procedures",
         "in vitro",
         "in vivo",
         "cell line",
@@ -488,10 +532,41 @@ class RankingService {
         "calpain pathway",
         "apoptosis in human",
         "synergizes with camptothecin",
+        // ✅ ADD:
+        "corrigendum",
+        "erratum",
+        "drug delivery",
+        "nanoparticle",
       ],
-      comparison: [],
-      access_cost: [],
-      general: [],
+      comparison: [
+        "machine learning",
+        "deep learning",
+        "prediction model",
+        "predictive model",
+        "neural network",
+        "cost-effective",
+        "economic burden",
+        "drug delivery",
+        "nanoparticle",
+        "corrigendum",
+        "erratum",
+      ],
+      access_cost: [
+        // ✅ ADD: Cost queries should not return lab papers
+        "in vitro",
+        "cell line",
+        "mouse model",
+        "murine",
+        "drug delivery",
+        "nanoparticle",
+        "corrigendum",
+        "erratum",
+      ],
+      general: [
+        // ✅ ADD: Even general queries should not return corrections
+        "corrigendum",
+        "erratum",
+      ],
     };
 
     this.intentAnswerSignals = {
@@ -626,7 +701,14 @@ class RankingService {
           "controlled trial",
           "participants",
         ],
-        negativeTitle: [],
+        negativeTitle: [
+          "corrigendum to",
+          "erratum to",
+          "correction to",
+          "retraction",
+          "study protocol",
+          "protocol for",
+        ],
         negativeAbstract: [],
       },
       mechanism: {
@@ -639,7 +721,12 @@ class RankingService {
           "revealed",
           "identified",
         ],
-        negativeTitle: [],
+        negativeTitle: [
+          "corrigendum to",
+          "erratum to",
+          "correction to",
+          "retraction",
+        ],
         negativeAbstract: [],
       },
       symptoms_diagnosis: {
@@ -653,7 +740,13 @@ class RankingService {
           "detected",
           "identified",
         ],
-        negativeTitle: [],
+        negativeTitle: [
+          "corrigendum to",
+          "erratum to",
+          "correction to",
+          "retraction",
+          "study protocol",
+        ],
         negativeAbstract: [],
       },
       prognosis: {
@@ -668,7 +761,12 @@ class RankingService {
           "recurrence",
           "relapse",
         ],
-        negativeTitle: [],
+        negativeTitle: [
+          "corrigendum to",
+          "erratum to",
+          "correction to",
+          "retraction",
+        ],
         negativeAbstract: [],
       },
       safety_efficacy: {
@@ -729,7 +827,13 @@ class RankingService {
           "lower incidence",
           "risk reduction",
         ],
-        negativeTitle: [],
+        negativeTitle: [
+          "corrigendum to",
+          "erratum to",
+          "correction to",
+          "retraction",
+          "study protocol",
+        ],
         negativeAbstract: [],
       },
       comparison: {
@@ -742,7 +846,13 @@ class RankingService {
           "difference",
           "head-to-head",
         ],
-        negativeTitle: [],
+        negativeTitle: [
+          "corrigendum to",
+          "erratum to",
+          "correction to",
+          "retraction",
+          "study protocol",
+        ],
         negativeAbstract: [],
       },
       side_effects: {
@@ -754,12 +864,44 @@ class RankingService {
           "immune-related",
           "treatment-related",
         ],
-        negativeTitle: [],
+        negativeTitle: [
+          "corrigendum to",
+          "erratum to",
+          "correction to",
+          "retraction",
+        ],
         negativeAbstract: [],
       },
-      researchers: { positive: [], negativeTitle: [], negativeAbstract: [] },
-      access_cost: { positive: [], negativeTitle: [], negativeAbstract: [] },
-      general: { positive: [], negativeTitle: [], negativeAbstract: [] },
+      researchers: {
+        positive: [],
+        negativeTitle: [
+          "corrigendum to",
+          "erratum to",
+          "correction to",
+          "retraction",
+        ],
+        negativeAbstract: [],
+      },
+      access_cost: {
+        positive: [],
+        negativeTitle: [
+          "corrigendum to",
+          "erratum to",
+          "correction to",
+          "retraction",
+        ],
+        negativeAbstract: [],
+      },
+      general: {
+        positive: [],
+        negativeTitle: [
+          "corrigendum to",
+          "erratum to",
+          "correction to",
+          "retraction",
+        ],
+        negativeAbstract: [],
+      },
     };
 
     this.paperTypePatterns = {
@@ -1246,6 +1388,7 @@ class RankingService {
     };
 
     this.trialHardExclusionPatterns = [
+      // existing patterns...
       "cough suppression",
       "pain relief during",
       "bronchoscopy comfort",
@@ -1267,6 +1410,26 @@ class RankingService {
       "awareness among",
       "knowledge and attitude",
       "telerehabilitation within",
+
+      // ✅ ADD: Old immunomodulator trials that keep appearing
+      "mycobacterium w in combination",
+      "mycobacterium w combination",
+
+      // ✅ ADD: Survey and knowledge studies that are not treatment trials
+      "survey among",
+      "knowledge among",
+      "attitude among",
+      "practices among",
+      "perception among",
+
+      // ✅ ADD: Completely unrelated procedural trials
+      "intraoperative neuromonitoring",
+      "surgical site infection prevention",
+      "venous thromboembolism prophylaxis",
+      "urinary catheter",
+      "central line insertion",
+      "hand hygiene",
+      "hospital acquired infection",
     ];
 
     this.intentTrialTypeMap = {
@@ -2096,13 +2259,26 @@ class RankingService {
     // RECRUITING trials are never filtered by age
     // Only old COMPLETED trials are filtered
     this.trialMaxAgeForIntent = {
+      // Active treatment queries — want recent trials
       treatment_solutions: 12,
       recent_research: 8,
       comparison: 10,
-      side_effects: 15,
+      access_cost: 10, // ✅ Cost trials should be recent
+
+      // Safety/lifestyle — somewhat recent
+      safety_efficacy: 10, // ✅ Mycobacterium trial fixed
+      prevention: 12, // ✅ Prevention trials
+      side_effects: 15, // Safety data can be older
+
+      // Outcome queries — older trials have matured data
       prognosis: 15,
-      clinical_trials: 20, // explicit trial query — show all
-      general: 20,
+      symptoms_diagnosis: 12, // ✅ Diagnostic trial guidelines
+      mechanism: 20, // ✅ Mechanism — no restriction
+
+      // Researcher and admin queries — show all
+      researchers: 20, // ✅ Not really trial-relevant
+      clinical_trials: 20, // ✅ User explicitly wants trials
+      general: 15, // ✅ Moderate default
     };
   }
 
@@ -2407,12 +2583,26 @@ class RankingService {
     }));
 
     const MAX_AGE_FOR_INTENT = {
+      // Time-critical — treatments change fast
       treatment_solutions: 5,
       recent_research: 3,
-      clinical_trials: 10,
       comparison: 5,
+      access_cost: 5, // ✅ Drug prices change fast
+
+      // Moderate — some older data still valid
       side_effects: 7,
       prognosis: 7,
+      safety_efficacy: 8, // ✅ Supplement/lifestyle evidence
+      prevention: 8, // ✅ Prevention guidelines update
+      symptoms_diagnosis: 8, // ✅ Diagnostic criteria update
+
+      // Lenient — older evidence still valid
+      clinical_trials: 10,
+      researchers: 10, // ✅ Review papers can be older
+      general: 8, // ✅ Moderate default
+
+      // No restriction — molecular biology is stable
+      mechanism: null, // ✅ No age filter for mechanism
     };
 
     const maxAge = MAX_AGE_FOR_INTENT[intentType] ?? null;

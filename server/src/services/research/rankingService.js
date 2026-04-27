@@ -3070,7 +3070,7 @@ class RankingService {
           `   ✅ Direct solution paper (+25): "${pub.title.substring(0, 50)}"`,
         );
       } else if (isContextualPaper && !isDirectSolution) {
-        score = Math.floor(score * 0.6);
+        score = Math.floor(score * 0.4);
         console.log(
           `   📋 Contextual paper (×0.6): "${pub.title.substring(0, 50)}"`,
         );

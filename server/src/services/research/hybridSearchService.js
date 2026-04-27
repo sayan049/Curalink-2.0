@@ -14,7 +14,7 @@ class HybridSearchService {
       console.log(`   Disease:  "${disease}"`);
       console.log(`   Location: "${context.location || "Not set"}"`);
 
-      // ✅ Clear stale query context from previous message
+      // Clear stale query context from previous message
       delete context._pubmedQuery;
       delete context._openalexQuery;
       delete context._intent;
@@ -90,19 +90,21 @@ class HybridSearchService {
         intent,
       );
 
+      // ✅ FIX: Pass intent to rankClinicalTrials
+      // Previously intent was never passed — intentType was always "general"
+      // This meant trial type matching, COMPLETED bonus, and age filter
+      // were never using the actual query intent
       const rankedTrials = rankingService.rankClinicalTrials(
         clinicalTrials,
         query,
         disease,
         context,
+        intent, // ✅ NOW PASSED
       );
 
       const finalSize = parseInt(process.env.FINAL_RESULTS_SIZE) || 8;
 
       // Step 6 + 7: Diversify from larger candidate pool
-      // ✅ KEY FIX: Pass top 20 not top 8 to diversifyResults
-      // This ensures old/irrelevant papers ranked 5-8 can be replaced
-      // by better candidates ranked 9-20 during diversification
       const diversifiedPublications = rankingService.diversifyResults(
         rankedPublications.slice(0, 20),
         finalSize,

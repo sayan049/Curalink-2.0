@@ -1,6 +1,5 @@
 class RankingService {
   constructor() {
-    // ── High-impact medical journals
     this.highImpactJournals = new Set([
       "nature medicine",
       "new england journal of medicine",
@@ -447,12 +446,26 @@ class RankingService {
         "pulmonary fibrosis",
         "pulmonary hypertension",
         "idiopathic pulmonary",
-        // ✅ ADDED: Corrigendum / correction notices
+        // ✅ Corrigendum / correction notices
         "corrigendum",
         "erratum",
         "correction to",
         "publisher correction",
         "author correction",
+        // ✅ Predictor papers — these answer WHO responds, not WHAT treatment
+        "as a predictor of",
+        "predictor of response",
+        "predictive biomarker",
+        "predicts response to",
+        "predicts outcomes",
+        "nomogram for",
+        "risk score for",
+        "scoring system for response",
+        "who benefits from",
+        "patient selection for",
+        "resting energy expenditure",
+        "body composition",
+        "nutritional status as",
       ],
       recent_research: [],
       clinical_trials: [],
@@ -525,7 +538,7 @@ class RankingService {
           "before targeted",
           "imaging protocol",
           "protocol study",
-          // ✅ ADDED: Corrigendum / correction notices
+          // ✅ Corrigendum
           "corrigendum to",
           "corrigendum:",
           "erratum to",
@@ -546,7 +559,6 @@ class RankingService {
           "historical cohort",
           "aims to investigate",
           "will be enrolled",
-          // ✅ ADDED: Future study signals
           "this study aims to",
           "we aim to evaluate",
           "will be recruited",
@@ -591,7 +603,6 @@ class RankingService {
           "yoga therapy",
           "herbal medicine",
           "herb pair",
-          // ✅ ADDED
           "corrigendum to",
           "erratum to",
           "correction to",
@@ -876,7 +887,7 @@ class RankingService {
         "state of the art",
         "overview of",
       ],
-      // ✅ ADDED: Corrigendum as its own type so it can be penalised
+      // ✅ Correction notices — always penalised
       correction_notice: [
         "corrigendum",
         "erratum",
@@ -912,7 +923,7 @@ class RankingService {
           "diagnostic_biomarker",
           "cost_analysis",
           "methodology_protocol",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
       recent_research: {
@@ -923,7 +934,7 @@ class RankingService {
           "drug_delivery",
           "cost_analysis",
           "methodology_protocol",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
       mechanism: {
@@ -932,7 +943,7 @@ class RankingService {
         penalised: [
           "cost_analysis",
           "methodology_protocol",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
       symptoms_diagnosis: {
@@ -942,7 +953,7 @@ class RankingService {
           "cost_analysis",
           "drug_delivery",
           "methodology_protocol",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
       clinical_trials: {
@@ -952,7 +963,7 @@ class RankingService {
           "mechanism_paper",
           "cost_analysis",
           "methodology_protocol",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
       prognosis: {
@@ -962,7 +973,7 @@ class RankingService {
           "mechanism_paper",
           "drug_delivery",
           "cost_analysis",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
       side_effects: {
@@ -972,7 +983,7 @@ class RankingService {
           "mechanism_paper",
           "prediction_model",
           "cost_analysis",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
       prevention: {
@@ -982,7 +993,7 @@ class RankingService {
           "mechanism_paper",
           "drug_delivery",
           "cost_analysis",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
       comparison: {
@@ -992,7 +1003,7 @@ class RankingService {
           "mechanism_paper",
           "prediction_model",
           "cost_analysis",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
       safety_efficacy: {
@@ -1002,7 +1013,7 @@ class RankingService {
           "mechanism_paper",
           "drug_delivery",
           "cost_analysis",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
       researchers: {
@@ -1011,17 +1022,13 @@ class RankingService {
         penalised: [
           "cost_analysis",
           "methodology_protocol",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
       access_cost: {
         preferred: ["cost_analysis"],
         acceptable: ["review_article", "clinical_outcome"],
-        penalised: [
-          "mechanism_paper",
-          "drug_delivery",
-          "correction_notice", // ✅ ADDED
-        ],
+        penalised: ["mechanism_paper", "drug_delivery", "correction_notice"],
       },
       general: {
         preferred: ["clinical_outcome", "review_article"],
@@ -1029,7 +1036,7 @@ class RankingService {
         penalised: [
           "cost_analysis",
           "methodology_protocol",
-          "correction_notice", // ✅ ADDED
+          "correction_notice",
         ],
       },
     };
@@ -1938,8 +1945,7 @@ class RankingService {
       kathmandu: "nepal",
     };
 
-    // ✅ NEW: Patterns that indicate a paper has NO real results
-    // Used in _abstractHasRealAnswer()
+    // ✅ No-result signals in abstract/title
     this.abstractNoResultSignals = [
       "this study aims",
       "this trial aims",
@@ -1965,7 +1971,7 @@ class RankingService {
       "we plan to",
     ];
 
-    // ✅ NEW: Patterns that indicate real clinical results exist in abstract
+    // ✅ Real result signals in abstract
     this.abstractRealResultSignals = [
       "we found",
       "we observed",
@@ -2010,24 +2016,94 @@ class RankingService {
       "identified significant",
     ];
 
-    // ✅ NEW: Regex patterns for real clinical numbers in abstract
-    // A paper reporting actual numbers is almost certainly reporting real results
+    // ✅ Regex patterns for real clinical numbers
     this.clinicalNumberPatterns = [
-      /\d+\.?\d*\s*%/, // "67%" or "45.3%"
-      /\d+\.?\d*\s*months/, // "18.5 months"
-      /hr\s*[=:]\s*0?\.\d+/i, // "HR = 0.72" or "HR: 0.65"
-      /hazard ratio.*\d/i, // "hazard ratio of 0.65"
-      /p\s*[<=>]\s*0?\.\d+/i, // "p < 0.05" or "p=0.001"
-      /p\s*value.*\d/i, // "p value of 0.03"
-      /median.*\d+\.?\d*\s*months/i, // "median of 18.5 months"
-      /os.*\d+\.?\d*\s*months/i, // "OS of 24 months"
-      /pfs.*\d+\.?\d*\s*months/i, // "PFS of 12 months"
-      /orr.*\d+\.?\d*\s*%/i, // "ORR of 45%"
-      /response rate.*\d+\.?\d*\s*%/i, // "response rate of 67%"
-      /survival.*\d+\.?\d*\s*%/i, // "survival of 78%"
-      /\d+\.?\d*\s*months.*survival/i, // "24 months survival"
-      /\(\d+\.?\d*.*\d+\.?\d*\)/, // confidence intervals like "(0.55-0.89)"
+      /\d+\.?\d*\s*%/,
+      /\d+\.?\d*\s*months/,
+      /hr\s*[=:]\s*0?\.\d+/i,
+      /hazard ratio.*\d/i,
+      /p\s*[<=>]\s*0?\.\d+/i,
+      /p\s*value.*\d/i,
+      /median.*\d+\.?\d*\s*months/i,
+      /os.*\d+\.?\d*\s*months/i,
+      /pfs.*\d+\.?\d*\s*months/i,
+      /orr.*\d+\.?\d*\s*%/i,
+      /response rate.*\d+\.?\d*\s*%/i,
+      /survival.*\d+\.?\d*\s*%/i,
+      /\d+\.?\d*\s*months.*survival/i,
+      /\(\d+\.?\d*.*\d+\.?\d*\)/,
     ];
+
+    // ✅ OpenAlex concept-based intent validation
+    this.intentConceptMap = {
+      treatment_solutions: [
+        "drug therapy",
+        "treatment",
+        "chemotherapy",
+        "immunotherapy",
+        "targeted therapy",
+        "clinical trial",
+        "efficacy",
+        "pharmacotherapy",
+        "antineoplastic",
+        "therapeutic",
+        "first-line therapy",
+        "combination therapy",
+      ],
+      mechanism: [
+        "molecular biology",
+        "biochemistry",
+        "signaling pathway",
+        "gene expression",
+        "molecular mechanism",
+        "cell biology",
+      ],
+      prognosis: [
+        "prognosis",
+        "survival analysis",
+        "mortality",
+        "disease-free survival",
+        "overall survival",
+      ],
+      symptoms_diagnosis: [
+        "diagnosis",
+        "biomarker",
+        "screening",
+        "detection",
+        "diagnostic imaging",
+        "medical imaging",
+      ],
+      prevention: [
+        "prevention",
+        "risk reduction",
+        "prophylaxis",
+        "risk factor",
+      ],
+    };
+
+    // ✅ Predictor concepts — these identify WHO responds, not WHAT treatment works
+    this.predictorConcepts = [
+      "predictive biomarker",
+      "patient selection",
+      "prognostic factor",
+      "risk stratification",
+      "biomarker",
+      "prediction",
+      "nomogram",
+    ];
+
+    // ✅ Trial age limits per intent
+    // RECRUITING trials are never filtered by age
+    // Only old COMPLETED trials are filtered
+    this.trialMaxAgeForIntent = {
+      treatment_solutions: 12,
+      recent_research: 8,
+      comparison: 10,
+      side_effects: 15,
+      prognosis: 15,
+      clinical_trials: 20, // explicit trial query — show all
+      general: 20,
+    };
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -2041,49 +2117,80 @@ class RankingService {
     return !invalidators.some((inv) => text.includes(inv));
   }
 
-  // ✅ NEW: Check if abstract actually contains real results
-  // Returns false if paper is a protocol, corrigendum, or has no results
-  // Returns true if paper reports real clinical findings
+  // ✅ Safe year extraction from any date format
+  // Handles: "2021-03", "2021-03-15", "2021", null
+  _extractYear(dateStr) {
+    if (!dateStr) return null;
+    const year = parseInt(dateStr.toString().substring(0, 4));
+    return isNaN(year) ? null : year;
+  }
+
+  // ✅ Check if abstract contains real results
   _abstractHasRealAnswer(abstractLower, titleLower) {
-    // If abstract is too short it probably has no useful content
     if (abstractLower.length < 80) return false;
 
-    // Hard reject: title contains corrigendum/erratum signals
     const titleHasNoResult = this.abstractNoResultSignals.some((sig) =>
       titleLower.includes(sig),
     );
     if (titleHasNoResult) return false;
 
-    // Hard reject: abstract contains no-result signals
     const abstractHasNoResult = this.abstractNoResultSignals.some((sig) =>
       abstractLower.includes(sig),
     );
     if (abstractHasNoResult) return false;
 
-    // Check for real result signals in abstract
     const hasResultSignal = this.abstractRealResultSignals.some((sig) =>
       abstractLower.includes(sig),
     );
     if (hasResultSignal) return true;
 
-    // Check for real clinical numbers
     const hasRealNumbers = this.clinicalNumberPatterns.some((pattern) =>
       pattern.test(abstractLower),
     );
     if (hasRealNumbers) return true;
 
-    // Abstract exists but has no result signals and no numbers
-    // It might still be a valid review — allow it through
-    // (we do not want to be too aggressive here)
     return true;
   }
 
-  // ✅ NEW: Check if abstract contains real clinical numbers
-  // Used as a scoring bonus, not a filter
+  // ✅ Check for real clinical numbers (scoring bonus)
   _hasRealClinicalNumbers(abstractLower) {
     return this.clinicalNumberPatterns.some((pattern) =>
       pattern.test(abstractLower),
     );
+  }
+
+  // ✅ OpenAlex concept-based intent validation
+  // Only runs for OpenAlex papers (concepts field present)
+  // Returns penalty multiplier: 1.0 = no penalty, 0.5 = penalised
+  _getConceptPenalty(pub, intentType) {
+    const concepts = pub.concepts || [];
+    if (concepts.length === 0) return 1.0; // PubMed — no concepts, no penalty
+
+    // For treatment_solutions, check if paper is a predictor paper
+    if (intentType === "treatment_solutions") {
+      const isPredictorPaper = concepts.some(
+        (c) =>
+          this.predictorConcepts.some((pc) => c.name.includes(pc)) &&
+          c.score > 0.6,
+      );
+
+      const hasTreatmentConcept = concepts.some(
+        (c) =>
+          (this.intentConceptMap.treatment_solutions || []).some((tc) =>
+            c.name.includes(tc),
+          ) && c.score > 0.4,
+      );
+
+      // Strong predictor signal with no treatment concept → penalty
+      if (isPredictorPaper && !hasTreatmentConcept) {
+        console.log(
+          `   🔬 Concept: predictor paper (×0.5): "${pub.title?.substring(0, 50)}"`,
+        );
+        return 0.5;
+      }
+    }
+
+    return 1.0;
   }
 
   _trialIsRelevant(conditionsCombined, titleLower, disease, diseaseTokens) {
@@ -2407,8 +2514,6 @@ class RankingService {
     }
 
     // ── Hard filter 4: Abstract must contain real results ─────────────────
-    // ✅ NEW: Only applies to result-oriented intents
-    // Rejects corrigenda, protocols, future study notices
     const RESULT_REQUIRED_INTENTS = [
       "treatment_solutions",
       "recent_research",
@@ -2429,11 +2534,37 @@ class RankingService {
       }
     }
 
-    // ── Hard filter 5: Minimum abstract length ───────────────────────────
-    // ✅ NEW: Papers with very short abstracts are usually not useful
-    if (abstractLower.length < 50) {
+    // ── Hard filter 5: Minimum abstract length + medical content ─────────
+    const MEANINGFUL_ABSTRACT_SIGNALS = [
+      "patients",
+      "treatment",
+      "therapy",
+      "clinical",
+      "cancer",
+      "disease",
+      "study",
+      "trial",
+      "results",
+      "outcomes",
+      "efficacy",
+      "safety",
+      "diagnosis",
+      "survival",
+      "response",
+      "analysis",
+      "cohort",
+      "randomized",
+    ];
+    if (abstractLower.length < 80) {
+      console.log(`   ❌ Abstract too short: "${pub.title.substring(0, 60)}"`);
+      return { ...pub, _rawScore: 0 };
+    }
+    const hasMedicalContent = MEANINGFUL_ABSTRACT_SIGNALS.some((sig) =>
+      abstractLower.includes(sig),
+    );
+    if (!hasMedicalContent) {
       console.log(
-        `   ❌ Abstract too short (${abstractLower.length} chars): "${pub.title.substring(0, 60)}"`,
+        `   ❌ Abstract no medical content: "${pub.title.substring(0, 60)}"`,
       );
       return { ...pub, _rawScore: 0 };
     }
@@ -2471,6 +2602,12 @@ class RankingService {
       );
     }
 
+    // ── OpenAlex concept penalty ──────────────────────────────────────────
+    const conceptPenalty = this._getConceptPenalty(pub, intentType);
+    if (conceptPenalty < 1.0) {
+      penaltyPct = Math.min(penaltyPct, conceptPenalty);
+    }
+
     let score = 0;
 
     // ── Factor 0: Paper type bonus (0–25 pts) ─────────────────────────────
@@ -2484,6 +2621,16 @@ class RankingService {
       console.log(
         `   🏆 Tier ${evidenceTier.tier} [${evidenceTier.tierLabel}] +${evidenceTier.tierScore}pts: ` +
           `"${pub.title.substring(0, 50)}"`,
+      );
+    }
+
+    // ── Factor 0.55: Retrospective penalty for treatment queries ──────────
+    // ✅ NEW: For treatment queries, retrospective studies are weak evidence
+    // We want Phase 3 RCTs and meta-analyses, not chart reviews
+    if (intentType === "treatment_solutions" && evidenceTier.tier === 6) {
+      score = Math.floor(score * 0.7);
+      console.log(
+        `   📉 Retrospective penalty ×0.7 for treatment query: "${pub.title.substring(0, 50)}"`,
       );
     }
 
@@ -2510,9 +2657,7 @@ class RankingService {
       );
     }
 
-    // ── Factor 0.8: Real clinical numbers bonus (0–20 pts) ────────────────
-    // ✅ NEW: Papers reporting actual numbers rank higher
-    // "OS of 18.5 months, HR 0.65, p<0.001" → these papers answer the question
+    // ── Factor 0.8: Real clinical numbers bonus (+20 pts) ─────────────────
     if (this._hasRealClinicalNumbers(abstractLower)) {
       score += 20;
       console.log(
@@ -2617,7 +2762,7 @@ class RankingService {
       );
     }
 
-    // ── Factor 4.5: Exact query phrase match bonus (0–30 pts) ─────────────
+    // ── Factor 4.5: Exact query phrase match (0–30 pts) ───────────────────
     if (queryTokens.length >= 2) {
       const queryPhrase = queryTokens.join(" ");
 
@@ -2723,6 +2868,13 @@ class RankingService {
     const diseaseTokens = disease ? this.tokenize(disease) : [];
     const location = context.location || null;
 
+    // ✅ FIX: Use passed intent OR fall back to context intent
+    const intentType = intent?.type || context._intent?.type || "general";
+    const currentYear = new Date().getFullYear();
+
+    // ✅ Trial age limit for this intent
+    const trialMaxAge = this.trialMaxAgeForIntent[intentType] ?? 20;
+
     const taggedTrials = location
       ? trials.map((trial) => this._tagTrialLocation(trial, location))
       : trials.map((trial) => ({
@@ -2763,6 +2915,7 @@ class RankingService {
         disease,
         location,
         context,
+        intentType,
       ),
     );
 
@@ -2785,9 +2938,29 @@ class RankingService {
           normalised.filter((t) => t.relevanceScore > 1).length >=
           MIN_TRIALS_THRESHOLD
         ) {
-          return trial.relevanceScore > 1;
+          if (trial.relevanceScore <= 1) return false;
+        } else {
+          if (trial.relevanceScore <= 0) return false;
         }
-        return trial.relevanceScore > 0;
+
+        // ✅ NEW: Age filter for old completed trials
+        // RECRUITING trials are never age-filtered
+        // Only very old COMPLETED trials are removed
+        if (trial.status === "COMPLETED" && trial.startDate) {
+          const startYear = this._extractYear(trial.startDate);
+          if (startYear !== null) {
+            const trialAge = currentYear - startYear;
+            if (trialAge > trialMaxAge) {
+              console.log(
+                `   📅 Trial age filtered (${trialAge}yr > max ${trialMaxAge}yr): ` +
+                  `"${(trial.title || "").substring(0, 50)}"`,
+              );
+              return false;
+            }
+          }
+        }
+
+        return true;
       });
 
     const localCount = ranked.filter((t) => t.isLocal).length;
@@ -2976,7 +3149,16 @@ class RankingService {
     });
   }
 
-  _scoreTrial(trial, queryTokens, diseaseTokens, disease, location, context) {
+  // ✅ Updated _scoreTrial — now receives intentType directly
+  _scoreTrial(
+    trial,
+    queryTokens,
+    diseaseTokens,
+    disease,
+    location,
+    context,
+    intentType,
+  ) {
     let score = 0;
 
     const titleLower = (trial.title || "").toLowerCase();
@@ -2984,7 +3166,6 @@ class RankingService {
       .map((c) => c.toLowerCase())
       .join(" ");
     const diseaseLower = disease ? disease.toLowerCase() : "";
-    const intentType = context._intent?.type || "general";
 
     // ── Factor 1: Location scoring ────────────────────────────────────────
     if (location) {
@@ -3127,13 +3308,15 @@ class RankingService {
 
     // ── Factor 10: Recency ────────────────────────────────────────────────
     if (trial.startDate) {
-      const age =
-        new Date().getFullYear() - new Date(trial.startDate).getFullYear();
-      if (age <= 1) score += 10;
-      else if (age <= 2) score += 8;
-      else if (age <= 3) score += 6;
-      else if (age <= 5) score += 4;
-      else score += 1;
+      const startYear = this._extractYear(trial.startDate);
+      if (startYear !== null) {
+        const age = new Date().getFullYear() - startYear;
+        if (age <= 1) score += 10;
+        else if (age <= 2) score += 8;
+        else if (age <= 3) score += 6;
+        else if (age <= 5) score += 4;
+        else score += 1;
+      }
     }
 
     return { ...trial, _rawScore: Math.max(0, score) };

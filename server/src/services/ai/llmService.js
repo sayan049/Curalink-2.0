@@ -9,9 +9,9 @@ class LLMService {
     this.client = ollamaConfig.getClient();
   }
 
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   // CORE: Generate text completion
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   async generate(prompt, options = {}) {
     try {
       const response = await this.client.chat.completions.create({
@@ -32,9 +32,9 @@ class LLMService {
     }
   }
 
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   // CORE: Chat completion (multi-turn)
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   async chat(messages, options = {}) {
     try {
       const response = await this.client.chat.completions.create({
@@ -58,14 +58,17 @@ class LLMService {
     }
   }
 
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   // BUILD SYSTEM PROMPT
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   buildSystemPrompt(context, userProfile = {}, isResearcherQuery = false) {
     const disease = context?.disease || "the medical condition";
     const location = context?.location || userProfile?.location || null;
     const isLifestyleQuery = context?.isLifestyleQuery || false;
     const originalQuery = context?.originalQuery || "";
+    const searchMode = context?.searchMode || "keyword";
+    const clinicalFocus = context?._clinicalFocus || "";
+    const mustHaveSignals = context?._mustHaveSignals || [];
 
     const prevEntities =
       Array.isArray(context?.responseEntities) &&
@@ -76,261 +79,703 @@ class LLMService {
     const noLocalTrials = context?.noLocalTrials || false;
     const fallbackCount = context?.fallbackTrialCount || 0;
 
+    const trialInstruction =
+      noLocalTrials && fallbackCount > 0
+        ? `Start with: No clinical trials were found near ${location}. Then summarise global trials shown.`
+        : noLocalTrials && fallbackCount === 0
+          ? `State that no clinical trials are currently available. Check ClinicalTrials.gov.`
+          : location
+            ? `Summarise trials near ${location}. Mention phase, intervention, status, contact.`
+            : "Summarise the most relevant clinical trials with phase, status, intervention.";
+
     let prompt = `You are Curalink, a medical AI research assistant.
 
-ABSOLUTE RULES - NEVER VIOLATE:
-1. ONLY discuss "${disease}" - no other diseases
-2. Key findings MUST come from the papers listed in the user message
-3. NEVER mention drugs/treatments for other diseases:
-   - If disease is NOT diabetes: never mention metformin, HbA1c, GLP-1, SGLT2, insulin
-   - If disease is NOT lung cancer: never mention pembrolizumab, osimertinib, EGFR, NSCLC
-   - If disease is NOT Alzheimer's: never mention lecanemab, donanemab, amyloid (unless asked)
-4. Each key finding MUST cite [1], [2], etc. from the provided papers
-5. clinicalTrialsSummary MUST be a single plain STRING — never an array
-6. Return ONLY valid JSON — no markdown, no text before or after the JSON
-7. sourceSnippets must use real direct quotes from the provided abstracts
-8. NEVER fabricate or hallucinate findings not present in the papers
+CORE RULES:
+1. Write about the condition in the PAPERS provided
+   If papers are about diabetes → discuss diabetes findings
+   If papers are about lung cancer → discuss lung cancer findings
+   Do NOT refuse to discuss a paper because it differs from "${disease}"
+2. Key findings MUST come ONLY from the papers listed below
+3. Each key finding MUST cite a DIFFERENT paper [1], [2], [3]...
+4. Do NOT cite the same [N] twice in keyFindings
+5. clinicalTrialsSummary must be a plain STRING — never an array
+6. Return ONLY valid JSON — no markdown, no text before/after
+7. NEVER fabricate findings not present in the papers
 
-CITATION REQUIREMENTS — CRITICAL:
-- You MUST generate between 6 and 8 key findings
-- Each finding MUST cite a DIFFERENT paper using [1], [2], [3]... format
-- Do NOT cite the same paper number twice in keyFindings
-- Every paper provided MUST be referenced at least once somewhere in your response
-- You MUST include specific numbers from each paper when available
-- Format: "[Treatment/drug] showed [specific outcome with number] in [patient group] [citation]"
-- GOOD: "Domvanalimab + zimberelimab achieved ORR 53.8% and OS 17.1 months in PD-L1-high NSCLC [6]"
-- BAD: "Domvanalimab shows promising results [6]" — TOO VAGUE, NEVER DO THIS
-- If abstract has hazard ratio, response rate, survival months, or p-value, you MUST include it in the finding
-- Use the "Key outcome" field provided per paper as the core of your finding
+CITATION RULES:
+- Generate 6-8 key findings, one per paper
+- Each [N] appears EXACTLY ONCE in keyFindings
+- Include specific numbers: ORR %, OS months, HR, p-value
+- Format: "[Drug/treatment] showed [outcome with number] in [patients] [N]"
+- GOOD: "Pembrolizumab achieved ORR 45.2% and median OS 16.7 months in PD-L1 ≥50% NSCLC [3]"
+- BAD: "Pembrolizumab shows promising results [3]" — TOO VAGUE
+- Use the "Key outcome" field per paper as the core of each finding
 
-SAFETY CONSIDERATIONS RULES:
-- Safety notes MUST come ONLY from the provided papers
-- If a paper mentions specific adverse events, toxicities, or safety warnings, cite them with the paper number
-- Do NOT write generic safety statements from your training knowledge
-- If no safety data exists in the papers, state: "No specific safety data was reported in the provided studies"
-- Format: "According to paper [N], [specific safety finding from that paper]"`;
+EVIDENCE QUALITY:
+- Phase 3 RCT / large meta-analysis: state directly — "The Phase 3 trial demonstrated..."
+- Phase 2 / cohort: qualify — "A Phase 2 study (n=248) showed..."
+- Pilot / retrospective: label — "A small retrospective study (n=42) suggested..."
 
+SAFETY RULES — READ CAREFULLY:
+Each paper now has a "Safety signal" field pre-extracted from the abstract.
+You MUST use this field.
+
+Step 1 — Check "Safety signal" field per paper:
+- "Grade 3+ AE: 38%" → report: "The [study] [N] reported grade 3+ AEs in 38% of patients"
+- "Discontinuation: 12%" → report it with [N]
+- "Safety conclusion: well-tolerated" → report it with [N]
+- "Comparative safety: no increased risk of..." → report it with [N]
+- "No specific safety data extracted" → then check title and abstract
+
+Step 2 — Check TITLES for safety signals:
+- Title contains "without increased risk" → report no increased risk [N]
+- Title contains "Efficacy and Safety" → abstract has adverse event data, find it
+- Title contains "well-tolerated" or "manageable" → report with [N]
+
+Step 3 — Scan abstracts for remaining safety signals:
+- Grade 3/4 AE rates
+- Immune-related adverse events (irAE)
+- Discontinuation rates
+- Specific toxicities with percentages
+
+Step 4 — Format:
+- "The [study type] [N] reported [specific finding with number]"
+- NEVER report a number unless it is specifically a safety RATE/OUTCOME
+- If a percentage appears near "trials" or "studies" (not patients), skip it
+
+Step 5 — Minimum:
+- If 8 papers provided → at least 2-3 safety findings required
+- "Efficacy AND Safety" papers ALWAYS have safety data — find it`;
+
+    // ── SMART mode ────────────────────────────────────────────────────────
+    if (searchMode === "semantic" && clinicalFocus) {
+      prompt += `
+
+SMART MODE — CLINICAL FOCUS: "${clinicalFocus}"
+${mustHaveSignals.length > 0 ? `Emphasize: ${mustHaveSignals.join(", ")}` : ""}
+Prioritize papers directly addressing: "${clinicalFocus}"`;
+    }
+
+    // ── Lifestyle query ───────────────────────────────────────────────────
     if (isLifestyleQuery) {
       prompt += `
 
-LIFESTYLE/DIET QUERY DETECTED: "${originalQuery}"
-The user is asking about: diet, food, lifestyle, or general wellness in the context of ${disease}.
-
-IMPORTANT INSTRUCTIONS FOR THIS QUERY:
-- If the provided papers do NOT contain direct evidence about "${originalQuery}", say so honestly
-- Do NOT fabricate connections between papers and the user's question
-- Answer based ONLY on what the papers actually say
-- If no papers address this directly, say: "The current research database does not contain direct studies on [topic] for ${disease} patients. Please consult your oncologist."
-- keyFindings should only include findings from papers that actually address diet/lifestyle/the specific query
-- Do NOT cite papers about chemotherapy/immunotherapy as evidence about food safety`;
+LIFESTYLE QUERY: "${originalQuery}"
+- Answer based ONLY on what the papers say
+- If no papers address this: state "The research database does not contain direct studies on [topic]. Consult your doctor."
+- Do NOT cite chemotherapy papers as evidence about food/supplements`;
     }
 
+    // ── Low result count ──────────────────────────────────────────────────
     if (context?.lowResultCount) {
       prompt += `
 
-⚠️  LOW RESULT WARNING: Only ${context.actualPaperCount} paper(s) were found.
-- Only cite findings from the ${context.actualPaperCount} paper(s) provided above
-- Do NOT fill gaps using your training data knowledge
-- Do NOT fabricate citations like [2] or [3] if they do not exist in the list
-- If the papers don't fully answer the question, say:
-  "Limited research was found on this specific topic. The available evidence suggests..."
-- Never invent statistics, drug names, or outcomes not present in the provided abstracts`;
+LOW RESULT WARNING: Only ${context.actualPaperCount} paper(s) found.
+- Only cite the ${context.actualPaperCount} paper(s) provided
+- Do NOT fill gaps with training knowledge
+- If insufficient: "Limited research found. Available evidence suggests..."`;
     }
 
+    // ── Location ──────────────────────────────────────────────────────────
     if (location) {
       if (noLocalTrials && fallbackCount > 0) {
         prompt += `
 
-USER LOCATION: ${location}
-⚠️  IMPORTANT TRIAL NOTICE: No clinical trials were found in or near ${location} for ${disease}.
-The ${fallbackCount} trials listed below are GLOBAL trials from other countries.
-In your clinicalTrialsSummary field you MUST explicitly state:
-"No clinical trials were found near ${location} for ${disease}. 
-The following global trials may still be relevant for reference: [brief summary of trials shown]"
-Do NOT pretend these are local trials.`;
+LOCATION: ${location} — No local trials found.
+${fallbackCount} global trials shown. In clinicalTrialsSummary:
+"No trials near ${location}. Global trials shown for reference: [summary]"`;
       } else if (noLocalTrials && fallbackCount === 0) {
         prompt += `
 
-USER LOCATION: ${location}
-⚠️  IMPORTANT TRIAL NOTICE: No clinical trials were found for ${disease} — 
-neither near ${location} nor globally.
-In your clinicalTrialsSummary field you MUST state:
-"No clinical trials are currently available for ${disease}. 
-Consider checking ClinicalTrials.gov directly for the latest listings."`;
+LOCATION: ${location} — No trials found globally.
+State: "No clinical trials currently available. Check ClinicalTrials.gov."`;
       } else {
         prompt += `
 
-USER LOCATION: ${location}
-Prioritise clinical trials in or near ${location} in your clinicalTrialsSummary.
-Mention specific cities/regions when available.`;
+LOCATION: ${location} — Prioritize nearby trials in clinicalTrialsSummary.`;
       }
     }
 
-    if (isResearcherQuery) {
-      prompt += `
+    // ── Researcher mode ───────────────────────────────────────────────────
+if (isResearcherQuery) {
+  prompt += `
 
 RESEARCHER QUERY MODE:
-- Identify lead authors from the papers provided
-- Format keyFindings as author contributions:
-  ["Dr. LastName (Institution): specific contribution to ${disease} research [1]"]
-- Focus on who discovered/developed/pioneered what, not generic disease facts`;
-    }
+- Format keyFindings as researcher contributions — NOT generic disease findings
+- Format: "Author Name (Year): [what they discovered] — [specific number/finding] [N]"
+- GOOD: "Yan Keqiang (2026): demonstrated plasma tau 181 sensitivity 89% for AD diagnosis [1]"
+- BAD: "Dr. Yan Keqiang (Institution): plasma tau showed differences [1]"
+- Do NOT write "(Institution)" — write the actual finding
+- safetyConsiderations: state "Safety data is available in full text of each referenced publication [N]"
+- recommendations: summarize which research directions show most promise, not treatment guidelines`;
+}
 
+    // ── Previous context ──────────────────────────────────────────────────
     if (prevEntities.length > 0) {
       prompt += `
 
-PREVIOUS RESPONSE MENTIONED: ${prevEntities.join(", ")}
-(If the user asks about "it", "which one", "the first", "that drug" etc., 
-these are the likely referents from the previous answer)`;
+PREVIOUS RESPONSE MENTIONED: ${prevEntities.join(", ")}`;
     }
 
     if (
       Array.isArray(context?.previousQueries) &&
       context.previousQueries.length > 0
     ) {
-      const recent = context.previousQueries.slice(-2);
-      prompt += `
-
-RECENT TOPICS: ${recent.join(" → ")}`;
+      prompt += `\nRECENT TOPICS: ${context.previousQueries.slice(-2).join(" → ")}`;
     }
 
+    // ── Response format ───────────────────────────────────────────────────
     prompt += `
 
 DISEASE IN FOCUS: "${disease}"
 
-RESPONSE FORMAT (return this JSON structure ONLY, nothing else):
+Return ONLY this JSON:
 {
-  "conditionOverview": "2-3 sentences about ${disease} relevant to the query. Be specific and factual.",
-  "keyFindings": [
-    "Specific finding with real data about ${disease} from paper 1 [1]",
-    "Specific finding with real data about ${disease} from paper 2 [2]",
-    "Specific finding with real data about ${disease} from paper 3 [3]",
-    "Specific finding with real data about ${disease} from paper 4 [4]",
-    "Specific finding with real data about ${disease} from paper 5 [5]",
-    "Specific finding with real data about ${disease} from paper 6 [6]",
-    "Add finding from paper 7 if available [7]",
-    "Add finding from paper 8 if available [8]"
-  ],
-  "researchInsights": "2-3 sentences analysing ${disease} research trends and gaps from the provided papers.",
-  "clinicalTrialsSummary": "Single plain string — never an array. ${
-    noLocalTrials && fallbackCount > 0
-      ? `Start with: No clinical trials were found near ${location}. Then summarise the global trials shown.`
-      : noLocalTrials && fallbackCount === 0
-        ? `State that no clinical trials are currently available for ${disease}.`
-        : location
-          ? `Summarise trials near ${location} if available, mention status and phase.`
-          : "Summarise the most relevant clinical trials listed."
-  }",
-  "recommendations": [
-    "Evidence-based recommendation for ${disease} from the research — cite the paper"
-  ],
-  "safetyConsiderations": [
-    "Safety note FROM THE PROVIDED PAPERS ONLY — cite with paper number like [1]",
-    "If no safety data in papers, write: No specific safety data reported in provided studies"
-  ],
-  "sourceSnippets": [
-    {
-      "title": "exact paper title from the list",
-      "authors": "Author1, Author2",
-      "year": 2024,
-      "platform": "PUBMED",
-      "url": "https://pubmed.ncbi.nlm.nih.gov/...",
-      "snippet": "direct quote from abstract max 80 chars"
-    }
-  ]
+  "conditionOverview": "2-3 sentences about the condition in the papers, relevant to the query.",
+  "keyFindings": ["finding [1]", "finding [2]", "finding [3]", "finding [4]", "finding [5]", "finding [6]", "finding [7] if available", "finding [8] if available"],
+  "researchInsights": "2-3 sentences on research quality, trends, gaps.",
+  "clinicalTrialsSummary": "${trialInstruction}",
+  "recommendations": ["Based on [evidence type] [N] showing [outcome]: consider [action]"],
+  "safetyConsiderations": ["Use Safety signal field. The [study] [N] reported [finding]", "Second [N]", "Third [N]"],
+  "sourceSnippets": [{"title": "exact title", "authors": "A, B", "year": 2024, "platform": "PUBMED", "url": "url", "snippet": "80 char quote"}]
 }`;
 
     return prompt;
   }
 
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   // BUILD USER PROMPT
-  // ============================================================
-  buildUserPrompt(
-    query,
-    publications = [],
-    clinicalTrials = [],
-    isResearcherQuery = false,
-  ) {
-    let prompt = `QUERY: "${query}"\n`;
+  // ════════════════════════════════════════════════════════════════════════
+ buildUserPrompt(
+  query,
+  publications = [],
+  clinicalTrials = [],
+  isResearcherQuery = false,
+) {
+  const queryLower = query.toLowerCase();
 
-    if (isResearcherQuery) {
-      prompt += `TASK: Identify lead authors and their contributions.\n`;
-      prompt += `FORMAT keyFindings as author contributions:\n`;
-      prompt += `["Dr. LastName (Institution): specific contribution to the field [1]"]\n`;
-      prompt += `NOT as generic disease findings.\n\n`;
-    }
+  // ── Clinical context detection ──────────────────────────────────────────
+  const isProgressionQuery =
+    queryLower.includes("progressed") ||
+    queryLower.includes("stopped working") ||
+    queryLower.includes("next line") ||
+    queryLower.includes("second line") ||
+    queryLower.includes("third line") ||
+    queryLower.includes("after immunotherapy") ||
+    queryLower.includes("after chemotherapy") ||
+    queryLower.includes("post-immunotherapy") ||
+    queryLower.includes("salvage") ||
+    queryLower.includes("refractory") ||
+    queryLower.includes("resistant") ||
+    (queryLower.includes("after") &&
+      (queryLower.includes("failed") || queryLower.includes("failure")));
 
-    const totalPapers = Math.min(publications.length, 8);
-    prompt += `\nIMPORTANT: You have ${totalPapers} papers below. You MUST cite ALL of them.\n`;
-    prompt += `Generate one key finding per paper using [1] through [${totalPapers}].\n`;
-    prompt += `Use the "Key outcome" field as the core of your finding — include the number.\n\n`;
+  const isComparisonQuery =
+    queryLower.includes(" vs ") ||
+    queryLower.includes(" versus ") ||
+    queryLower.includes("compare") ||
+    queryLower.includes("which is better") ||
+    queryLower.includes("which has better") ||
+    queryLower.includes("head-to-head") ||
+    queryLower.includes("difference between") ||
+    queryLower.includes("better than") ||
+    queryLower.includes("superior");
 
-    prompt += `=== PAPERS (${publications.length}) ===\n`;
+  const isCNSQuery =
+    queryLower.includes("brain") ||
+    queryLower.includes("cns") ||
+    queryLower.includes("intracranial") ||
+    queryLower.includes("blood-brain") ||
+    queryLower.includes("metastases") ||
+    queryLower.includes("leptomeningeal") ||
+    queryLower.includes("cranial");
 
-    publications.slice(0, 8).forEach((pub, idx) => {
-      const authors = Array.isArray(pub.authors)
-        ? pub.authors.slice(0, 3).join(", ")
-        : "Unknown";
+  const isSafetyQuery =
+    queryLower.includes("side effect") ||
+    queryLower.includes("adverse") ||
+    queryLower.includes("toxicity") ||
+    (queryLower.includes("safe") && !queryLower.includes("safety and"));
 
-      // ✅ 350 chars — numbers often appear mid-abstract
-      const abstract = pub.abstract
-        ? pub.abstract.substring(0, 350)
-        : "No abstract";
+  const isDiagnosisQuery =
+    queryLower.includes("diagnos") ||
+    queryLower.includes("symptom") ||
+    queryLower.includes("screening") ||
+    queryLower.includes("biomarker") ||
+    queryLower.includes("detect");
 
-      // ✅ Extract specific outcome hint to guide the LLM
-      const outcomeHint = this._extractOutcomeHint(pub.abstract || "");
+  const isPrognosisQuery =
+    queryLower.includes("prognosis") ||
+    queryLower.includes("survival rate") ||
+    queryLower.includes("life expectancy") ||
+    queryLower.includes("mortality") ||
+    queryLower.includes("5-year survival") ||
+    queryLower.includes("outlook");
 
-      prompt += `[${idx + 1}] ${pub.title || "Untitled"} (${pub.year || "N/A"})
-Authors: ${authors}
-Source: ${(pub.source || "").toUpperCase()}
-Key outcome: ${outcomeHint}
-Abstract: ${abstract}
-URL: ${pub.url || ""}
+  const isMechanismQuery =
+    queryLower.includes("mechanism") ||
+    queryLower.includes("how does") ||
+    queryLower.includes("pathway") ||
+    queryLower.includes("why does") ||
+    queryLower.includes("how it works");
 
-`;
-    });
+  const isClinicalTrialQuery =
+    queryLower.includes("clinical trial") ||
+    queryLower.includes("trial for") ||
+    queryLower.includes("trials for") ||
+    queryLower.includes("trials in") ||
+    queryLower.includes("enrolling") ||
+    queryLower.includes("recruiting");
 
-    if (clinicalTrials.length > 0) {
-      // ✅ 3 trials to save token space
-      prompt += `=== TRIALS (${clinicalTrials.length}) ===\n`;
-      clinicalTrials.slice(0, 3).forEach((trial, idx) => {
-        const locs = Array.isArray(trial.locations)
-          ? trial.locations.slice(0, 2).join("; ")
-          : "N/A";
-        const conds = Array.isArray(trial.conditions)
-          ? trial.conditions.slice(0, 2).join(", ")
-          : "N/A";
+  // ── Drug/mutation extraction ────────────────────────────────────────────
+  const DRUG_PATTERNS = [
+    // ALK inhibitors
+    "alectinib", "lorlatinib", "brigatinib", "crizotinib", "ceritinib",
+    "ensartinib", "neladalkib",
+    // EGFR inhibitors
+    "osimertinib", "erlotinib", "gefitinib", "afatinib", "lazertinib",
+    "zorifertinib", "amivantamab",
+    // Immunotherapy
+    "pembrolizumab", "nivolumab", "atezolizumab", "durvalumab",
+    "ipilimumab", "cemiplimab", "tislelizumab",
+    // Chemotherapy
+    "chemotherapy", "carboplatin", "pemetrexed", "paclitaxel",
+    "docetaxel", "vinorelbine", "gemcitabine",
+    // Other targeted
+    "bevacizumab", "ramucirumab", "capmatinib", "tepotinib",
+    "selpercatinib", "pralsetinib", "adagrasib", "sotorasib",
+    "trastuzumab", "sacituzumab",
+    // Diabetes drugs
+    "metformin", "semaglutide", "tirzepatide", "empagliflozin",
+    "dapagliflozin", "liraglutide", "sitagliptin", "canagliflozin",
+    "insulin", "orforglipron",
+    // Cardiology
+    "atorvastatin", "rosuvastatin", "aspirin", "warfarin",
+    "apixaban", "rivaroxaban", "sacubitril", "lisinopril",
+  ];
 
-        prompt += `[T${idx + 1}] ${trial.title || "Untitled"}
-Status: ${trial.status || "Unknown"} | Phase: ${trial.phase || "N/A"}
-Conditions: ${conds}
-Locations: ${locs}
-Contact: ${trial.contact?.email || "See URL"}
-URL: ${trial.url || ""}
+  const MUTATION_PATTERNS = [
+    "egfr", "alk", "ros1", "ret", "met", "kras", "braf",
+    "her2", "ntrk", "pd-l1", "tmb", "t790m", "exon 20",
+    "g12c", "l858r", "ex19del",
+  ];
 
-`;
-      });
-    }
+  const mentionedDrugs     = DRUG_PATTERNS.filter((d) => queryLower.includes(d));
+  const mentionedMutations = MUTATION_PATTERNS.filter((m) => queryLower.includes(m));
 
-    prompt += `INSTRUCTIONS:
-- Answer the query using ONLY the papers above
-- Generate one key finding per paper — cite [1] through [${totalPapers}]
-- Do NOT skip any paper — every paper needs at least one citation
-- Use the "Key outcome" field value in your finding
-- Include specific numbers: ORR %, OS months, HR values, p-values
-- Do NOT write "X shows promising results" — always include actual data from the abstract
-- For safetyConsiderations — ONLY use adverse events mentioned in the papers, cite the paper
-- If no safety data in papers: write "No specific safety data reported in the provided studies"
-- clinicalTrialsSummary must be a STRING (not array)
-- Return JSON ONLY`;
+  // ── Detect failed treatment for progression queries ─────────────────────
+  const getFailedTreatment = () => {
+    if (mentionedDrugs.length > 0) return mentionedDrugs[0];
+    if (queryLower.includes("immunotherapy") || queryLower.includes("ici")) return "immunotherapy";
+    if (queryLower.includes("egfr") || queryLower.includes("tki")) return "EGFR-TKI";
+    if (queryLower.includes("alk") || queryLower.includes("alectinib")) return "ALK inhibitor";
+    if (queryLower.includes("chemotherapy")) return "chemotherapy";
+    return "the previous treatment";
+  };
 
-    return prompt;
+  // ── Clinical answer framing ─────────────────────────────────────────────
+  // This tells the LLM EXACTLY what type of answer the user needs
+  // Works for ALL query types — not hardcoded to specific drugs/diseases
+  let clinicalAnswerNeeded = "";
+
+  if (isProgressionQuery) {
+    const failedDrug = getFailedTreatment();
+    clinicalAnswerNeeded =
+      `OPTIONS after ${failedDrug} failure.\n` +
+      `Focus on: next-generation drugs, resistance-specific options, clinical trial eligibility.\n` +
+      `Key data: PFS, OS, ORR specifically after prior ${failedDrug} failure.\n` +
+      `Do NOT report first-line efficacy data — focus on the progression/post-failure setting.`;
+  } else if (isComparisonQuery) {
+    const drugs = mentionedDrugs.slice(0, 2).join(" vs ");
+    clinicalAnswerNeeded =
+      `HEAD-TO-HEAD comparison of: ${drugs || "the mentioned treatments"}.\n` +
+      `Focus on: relative PFS, OS, ORR, and safety differences.\n` +
+      `Clearly state which treatment performed better and in which patient population.\n` +
+      `Key data: hazard ratios, p-values, subgroup analyses.`;
+  } else if (isCNSQuery) {
+    clinicalAnswerNeeded =
+      `CNS-specific clinical data.\n` +
+      `Focus on: intracranial ORR, CNS PFS, blood-brain barrier penetration rates.\n` +
+      `Name specific drugs known to cross BBB: osimertinib, lorlatinib, alectinib.\n` +
+      `Key data: intracranial response rates (%), CNS control rates, CNS PFS in months.`;
+  } else if (isSafetyQuery) {
+    clinicalAnswerNeeded =
+      `Safety and tolerability data.\n` +
+      `Focus on: grade 3/4 adverse event rates, specific toxicities, discontinuation rates.\n` +
+      `Key data: % patients with serious AEs, immune-related AEs (irAEs), organ toxicities.\n` +
+      `Compare safety profiles if multiple drugs are mentioned.`;
+  } else if (isDiagnosisQuery) {
+    clinicalAnswerNeeded =
+      `Diagnostic or biomarker data.\n` +
+      `Focus on: sensitivity, specificity, diagnostic accuracy of tests/biomarkers.\n` +
+      `Key data: AUC, sensitivity %, specificity %, PPV, NPV.`;
+  } else if (isPrognosisQuery) {
+    clinicalAnswerNeeded =
+      `Prognostic data.\n` +
+      `Focus on: overall survival rates, median OS, disease-free survival.\n` +
+      `Key data: 1-year, 3-year, 5-year survival rates, hazard ratios by stage.`;
+  } else if (isMechanismQuery) {
+    clinicalAnswerNeeded =
+      `Mechanistic understanding.\n` +
+      `Focus on: biological pathways, mechanism of action, resistance mechanisms.\n` +
+      `Explain HOW the treatment works at a molecular level.`;
+  } else if (isClinicalTrialQuery) {
+    clinicalAnswerNeeded =
+      `Clinical trial data.\n` +
+      `Focus on: trial phase, enrollment status, intervention type, location, eligibility.\n` +
+      `Key data: phase, primary endpoint, patient population, trial locations.`;
+  } else {
+    // General treatment outcome — covers "latest treatment", "best treatment",
+    // "treatment options", bare disease queries, etc.
+    clinicalAnswerNeeded =
+      `Treatment outcome data.\n` +
+      `Focus on: efficacy (ORR, PFS, OS), study design quality, patient population.\n` +
+      `Key data: response rates, survival data, hazard ratios.\n` +
+      `Prioritize Phase 3 RCTs and large meta-analyses over smaller studies.`;
   }
 
-  // ============================================================
-  // NEW: Extract key outcome hint from abstract
-  // ============================================================
+  // ── Build prompt ────────────────────────────────────────────────────────
+  let prompt = `QUERY: "${query}"\n\n`;
+  prompt += `CLINICAL CONTEXT: ${clinicalAnswerNeeded}\n`;
+
+  if (mentionedDrugs.length > 0) {
+    prompt += `Drugs in query: ${mentionedDrugs.join(", ")}\n`;
+  }
+  if (mentionedMutations.length > 0) {
+    prompt += `Biomarkers in query: ${mentionedMutations.join(", ")}\n`;
+  }
+  prompt += `\n`;
+
+if (isResearcherQuery) {
+  prompt +=
+    `TASK: Identify lead researchers and their contributions.\n` +
+    `Format keyFindings as: ["Lead Author Name: specific research contribution — key finding [N]"]\n` +
+    `Example: "Yan Keqiang (2026): showed plasma phosphorylated tau 181 has diagnostic value for AD — sensitivity 89%, specificity 92% [1]"\n` +
+    `Do NOT write "(Institution)" as a placeholder — use the actual finding instead.\n` +
+    `Focus on WHAT they discovered/demonstrated/showed, not WHO they are.\n\n`;
+}
+
+  const totalPapers = Math.min(publications.length, 8);
+  prompt +=
+    `You have ${totalPapers} papers. Cite ALL [1]–[${totalPapers}]. Each [N] ONCE only.\n\n`;
+
+  prompt += `=== PAPERS ===\n`;
+
+  publications.slice(0, 8).forEach((pub, idx) => {
+    const authors = Array.isArray(pub.authors)
+      ? pub.authors.slice(0, 2).join(", ")
+      : "Unknown";
+
+    // ✅ FIX: 400 chars for abstract
+    // Safety data and fuller clinical context appear at chars 300-400
+    // This fixes:
+    //   1. Safety "no specific data" for most papers
+    //   2. Vague p-values without clinical context (e.g. "p=0.01" without endpoint)
+    // Token budget:
+    //   System prompt: ~400 tokens
+    //   8 papers × 400 chars ≈ ~800 tokens
+    //   User prompt overhead: ~300 tokens
+    //   Total input: ~1500 tokens
+    //   max_tokens output: 2500
+    //   Total: ~4000 << 8192 Groq limit ✅
+    const abstract = pub.abstract
+      ? pub.abstract.substring(0, 400)
+      : "No abstract";
+
+    // ✅ Outcome hint: searched in full abstract (not truncated)
+    // Numbers can appear anywhere in abstract
+    const outcomeHint = this._extractOutcomeHint(pub.abstract || "");
+
+    // ✅ Safety hint: searched in first 500 chars
+    // Grade 3 AE rates typically appear after efficacy data (chars 300-500)
+    // _extractSafetyHint handles negative contexts to prevent hallucination
+    const safetyHint = this._extractSafetyHint(
+      pub.abstract ? pub.abstract.substring(0, 500) : "",
+      pub.title || "",
+    );
+
+    // ✅ Evidence tier: helps LLM qualify findings correctly
+    // "Phase 3 RCT" → direct statement
+    // "Pilot study" → "suggested"
+    const evidenceTier = this._classifyEvidenceTier(
+      pub.title || "",
+      pub.abstract || "",
+    );
+
+    prompt +=
+      `[${idx + 1}] ${pub.title || "Untitled"} (${pub.year || "N/A"})\n` +
+      `Authors: ${authors} | Source: ${(pub.source || "").toUpperCase()}\n` +
+      `Evidence: ${evidenceTier}\n` +
+      `Key outcome: ${outcomeHint}\n` +
+      `Safety signal: ${safetyHint}\n` +
+      `Abstract: ${abstract}\n` +
+      `URL: ${pub.url || ""}\n\n`;
+  });
+
+  if (clinicalTrials.length > 0) {
+    prompt += `=== TRIALS (top 3) ===\n`;
+    clinicalTrials.slice(0, 3).forEach((trial, idx) => {
+      const locs  = Array.isArray(trial.locations)
+        ? trial.locations.slice(0, 2).join("; ")
+        : "N/A";
+      const conds = Array.isArray(trial.conditions)
+        ? trial.conditions.slice(0, 2).join(", ")
+        : "N/A";
+      const interventions = Array.isArray(trial.interventions)
+        ? trial.interventions.slice(0, 2).join(", ")
+        : "N/A";
+
+      prompt +=
+        `[T${idx + 1}] ${trial.title || "Untitled"}\n` +
+        `Status: ${trial.status || "Unknown"} | Phase: ${trial.phase || "N/A"}\n` +
+        `Conditions: ${conds}\n` +
+        `Interventions: ${interventions}\n` +
+        `Locations: ${locs}\n` +
+        `Contact: ${trial.contact?.email || "See URL"}\n` +
+        `URL: ${trial.url || ""}\n\n`;
+    });
+  }
+
+  prompt +=
+    `INSTRUCTIONS:\n` +
+    `- Answer using ONLY the papers above\n` +
+    `- One finding per paper, each [N] ONCE\n` +
+    `- Lead each finding with the most clinically relevant data point\n` +
+    `- Use Key outcome field as the core number — include the actual value\n` +
+    `- Use Safety signal field in safetyConsiderations — report the actual finding\n` +
+    `- If Safety signal says "No specific safety data extracted" → check abstract yourself\n` +
+    `- Phase 3 RCT = direct statement; Pilot = "suggested"; Meta-analysis = "pooled data showed"\n` +
+    `- clinicalTrialsSummary: include phase, location, intervention, recruiting status, contact\n` +
+    `- recommendations: cite specific papers with their actual outcome data\n` +
+    `- Do NOT write "X shows promising results" — always include the specific number\n` +
+    `- Return JSON ONLY`;
+
+  return prompt;
+}
+  // ════════════════════════════════════════════════════════════════════════
+  // ✅ NEW: Extract safety hint from abstract
+  // Pre-extracts safety data so LLM doesn't miss it
+  // Called per paper in buildUserPrompt()
+  // ════════════════════════════════════════════════════════════════════════
+  _extractSafetyHint(abstract, title = "") {
+    if (!abstract || abstract.length < 20) {
+      return "No specific safety data extracted";
+    }
+
+    const titleLower = title.toLowerCase();
+    const abstractLower = abstract.toLowerCase();
+
+    // ✅ FIX: Pre-check for NEGATIVE safety context
+    // "without increased pneumonia risk" → the numbers nearby are NOT rates
+    // Report the conclusion, not the number
+    const isNegativeSafetyContext =
+      abstractLower.includes("without increased") ||
+      abstractLower.includes("no increased risk") ||
+      abstractLower.includes("no significant increase") ||
+      abstractLower.includes("did not increase") ||
+      abstractLower.includes("not associated with increased");
+
+    if (isNegativeSafetyContext) {
+      const negMatch =
+        abstract.match(
+          /without\s+increased\s+(?:risk\s+of\s+)?(\w+(?:\s+\w+)?(?:\s+\w+)?)/i,
+        ) ||
+        abstract.match(
+          /no\s+(?:significant\s+)?increased?\s+(?:risk\s+of\s+)?(\w+(?:\s+\w+)?)/i,
+        ) ||
+        abstract.match(
+          /did\s+not\s+increase.*?(?:risk\s+of\s+)?(\w+(?:\s+\w+)?)/i,
+        );
+      if (negMatch) {
+        return `Comparative safety: no increased risk of ${negMatch[1].trim()}`;
+      }
+      return "Comparative safety: no increased risk of adverse events vs comparator";
+    }
+
+    // ✅ Title-level negative safety signals
+    if (
+      titleLower.includes("without increased risk") ||
+      titleLower.includes("no increased risk") ||
+      titleLower.includes("without increased pneumonia")
+    ) {
+      const specificRisk = titleLower.includes("pneumonia")
+        ? "pneumonia"
+        : titleLower.includes("bleeding")
+          ? "bleeding"
+          : titleLower.includes("toxicity")
+            ? "toxicity"
+            : "adverse events";
+      return `Comparative safety: no increased risk of ${specificRisk}`;
+    }
+
+    const patterns = [
+      // Grade 3/4 AEs — most important
+      {
+        regex:
+          /grade\s*3\s*(?:or\s*(?:higher|above|more)|\/4|[+-])\s*(?:adverse\s*events?)?\s*(?:occurred|reported|in|were)\s*(\d+\.?\d*\s*%)/i,
+        label: "Grade 3+ AE",
+      },
+      {
+        regex:
+          /(\d+\.?\d*\s*%)\s*(?:of\s*patients?\s*)?(?:experienced|had|reported)\s*(?:any\s*)?grade\s*(?:3|≥3)/i,
+        label: "Grade 3+ AE",
+      },
+      // Treatment-related AEs
+      {
+        regex:
+          /treatment.related adverse events?\s*(?:occurred|reported|in)\s+(\d+\.?\d*\s*%)/i,
+        label: "Treatment-related AE",
+      },
+      {
+        regex:
+          /(\d+\.?\d*\s*%)\s*(?:of patients?\s*)?(?:had|experienced)\s*treatment.related/i,
+        label: "Treatment-related AE",
+      },
+      // Serious AEs
+      {
+        regex:
+          /serious adverse events?\s*(?:occurred|in|reported|rate).*?(\d+\.?\d*\s*%)/i,
+        label: "Serious AE",
+      },
+      // irAEs
+      {
+        regex:
+          /immune.related adverse events?\s*(?:occurred|in|rate).*?(\d+\.?\d*\s*%)/i,
+        label: "irAE rate",
+      },
+      {
+        regex:
+          /(\d+\.?\d*\s*%)\s*(?:of patients?\s*)?(?:had|experienced)\s*immune.related/i,
+        label: "irAE rate",
+      },
+      // Discontinuation
+      {
+        regex: /discontinu(?:ed|ation)\s*(?:rate|due to).*?(\d+\.?\d*\s*%)/i,
+        label: "Discontinuation rate",
+      },
+      {
+        regex: /(\d+\.?\d*\s*%)\s*(?:of patients?\s*)?discontinued/i,
+        label: "Discontinuation rate",
+      },
+      // Specific toxicities — require rate context (not just proximity)
+      {
+        regex:
+          /pneumoni[at]\s+(?:occurred|rate|incidence)\s+(?:in|of|was)?\s*(\d+\.?\d*\s*%)/i,
+        label: "Pneumonia rate",
+      },
+      {
+        regex:
+          /(\d+\.?\d*\s*%)\s+(?:incidence\s+of\s+|rate\s+of\s+)?pneumoni[at]/i,
+        label: "Pneumonia rate",
+      },
+      {
+        regex:
+          /neutropenia\s+(?:occurred|rate|incidence)\s+(?:in|of|was)?\s*(\d+\.?\d*\s*%)/i,
+        label: "Neutropenia rate",
+      },
+      {
+        regex: /(\d+\.?\d*\s*%)\s+(?:incidence\s+of\s+)?neutropenia/i,
+        label: "Neutropenia rate",
+      },
+      {
+        regex: /hepatotoxicity.*?(\d+\.?\d*\s*%)/i,
+        label: "Hepatotoxicity rate",
+      },
+      // Safety conclusions (no numbers)
+      {
+        regex:
+          /(well.tolerated|manageable safety profile|no new safety signals|acceptable safety profile|favorable safety)/i,
+        label: "Safety conclusion",
+      },
+      // AE rate with patient context (requires "of patients" or similar)
+      {
+        regex:
+          /(\d+\.?\d*\s*%)\s+of\s+patients?\s+(?:had|reported|experienced)\s+(?:any\s+)?(?:grade\s*\d+\s*)?adverse/i,
+        label: "AE rate",
+      },
+      {
+        regex:
+          /adverse events?\s+(?:occurred|reported)\s+in\s+(\d+\.?\d*\s*%)\s+of\s+patients?/i,
+        label: "AE rate",
+      },
+    ];
+
+    for (const { regex, label } of patterns) {
+      const match = abstract.match(regex);
+      if (match) {
+        const value = match[1] || match[0];
+        return `${label}: ${value.trim()}`;
+      }
+    }
+
+    // Title-level safety signals when abstract yields nothing
+    if (
+      titleLower.includes("well-tolerated") ||
+      titleLower.includes("manageable")
+    ) {
+      return "Safety conclusion: well-tolerated safety profile";
+    }
+
+    return "No specific safety data extracted from abstract";
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // ✅ NEW: Classify evidence tier for LLM guidance
+  // ════════════════════════════════════════════════════════════════════════
+  _classifyEvidenceTier(title, abstract) {
+    const combined = `${title} ${abstract}`.toLowerCase();
+
+    if (
+      combined.includes("phase 3") ||
+      combined.includes("phase iii") ||
+      combined.includes("randomized controlled trial") ||
+      combined.includes("randomised controlled trial")
+    )
+      return "Phase 3 RCT — high evidence";
+
+    if (
+      combined.includes("meta-analysis") ||
+      combined.includes("systematic review") ||
+      combined.includes("pooled analysis") ||
+      combined.includes("network meta-analysis")
+    )
+      return "Meta-analysis / Systematic Review — high evidence";
+
+    if (
+      combined.includes("phase 2") ||
+      combined.includes("phase ii") ||
+      combined.includes("prospective cohort") ||
+      combined.includes("multicenter prospective")
+    )
+      return "Phase 2 / Prospective cohort — moderate evidence";
+
+    if (
+      combined.includes("real-world") ||
+      combined.includes("real world") ||
+      combined.includes("cohort study") ||
+      combined.includes("population-based")
+    )
+      return "Real-world cohort — moderate evidence";
+
+    if (
+      combined.includes("retrospective") ||
+      combined.includes("single-arm") ||
+      combined.includes("observational study")
+    )
+      return "Retrospective / Single-arm — lower evidence";
+
+    if (
+      combined.includes("pilot study") ||
+      combined.includes("feasibility") ||
+      combined.includes("case series")
+    )
+      return "Pilot / Feasibility — preliminary only";
+
+    return "Study type unclear — qualify findings carefully";
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Extract key outcome hint from abstract
+  // ════════════════════════════════════════════════════════════════════════
   _extractOutcomeHint(abstract) {
     if (!abstract || abstract.length < 20) return "See abstract below";
 
@@ -373,35 +818,60 @@ URL: ${trial.url || ""}
         regex: /pathologic complete response.*?(\d+\.?\d*\s*%)/i,
         label: "pCR",
       },
+      // Diabetes-specific
+      {
+        regex: /hba1c.*?(?:reduced?|decreased?|lowered?).*?(\d+\.?\d*\s*%)/i,
+        label: "HbA1c reduction",
+      },
+      { regex: /hba1c.*?(\d+\.?\d*\s*%)/i, label: "HbA1c" },
+      { regex: /blood pressure.*?(\d+\.?\d*\s*mmhg)/i, label: "BP reduction" },
+      {
+        regex: /(\d+\.?\d*\s*%)\s*(?:reduction|decrease|lower|improvement)/i,
+        label: "Reduction",
+      },
+      {
+        regex: /weight.*?(?:loss|reduction).*?(\d+\.?\d*\s*kg)/i,
+        label: "Weight loss",
+      },
+      // Cardiology
+      { regex: /mace.*?(\d+\.?\d*\s*%)/i, label: "MACE rate" },
+      { regex: /cardiovascular.*?(\d+\.?\d*\s*%)/i, label: "CV outcome" },
+      // CNS-specific
+      {
+        regex: /intracranial (?:response|orr|control).*?(\d+\.?\d*\s*%)/i,
+        label: "Intracranial ORR",
+      },
+      {
+        regex: /cns (?:response|control|orr).*?(\d+\.?\d*\s*%)/i,
+        label: "CNS ORR",
+      },
+      {
+        regex: /intracranial pfs.*?(\d+\.?\d*\s*months)/i,
+        label: "Intracranial PFS",
+      },
     ];
 
     for (const { regex, label } of patterns) {
       const match = abstract.match(regex);
-      if (match) {
-        return `${label}: ${match[1]}`;
-      }
+      if (match) return `${label}: ${match[1]}`;
     }
 
-    // No number found — use first meaningful sentence
     const sentences = abstract.split(".");
     for (const sentence of sentences) {
       const trimmed = sentence.trim();
-      if (trimmed.length > 30 && trimmed.length < 120) {
-        return trimmed;
-      }
+      if (trimmed.length > 30 && trimmed.length < 120) return trimmed;
     }
 
     return "See abstract below";
   }
 
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   // BUILD CHAT MESSAGES
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   buildChatMessages(systemPrompt, conversationHistory = [], userPrompt) {
     const messages = [{ role: "system", content: systemPrompt }];
 
     const safeHistory = conversationHistory.slice(-4);
-
     safeHistory.forEach((msg) => {
       if (!msg?.content || !msg?.role) return;
       messages.push({
@@ -414,9 +884,9 @@ URL: ${trial.url || ""}
     return messages;
   }
 
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   // MAIN: Generate medical response
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   async generateMedicalResponse(
     query,
     context = {},
@@ -456,17 +926,23 @@ URL: ${trial.url || ""}
       userPrompt,
     );
 
+    const searchMode = context?.searchMode || "keyword";
+
     console.log("\n🤖 LLM Request:");
     console.log(`   Query:        "${query}"`);
     console.log(`   Disease:      "${context.disease || "Not set"}"`);
+    console.log(`   Mode:         ${searchMode.toUpperCase()}`);
     console.log(`   Publications: ${publications.length}`);
     console.log(`   Trials:       ${clinicalTrials.length}`);
     console.log(`   History:      ${conversationHistory.length} msgs`);
+    if (context._clinicalFocus) {
+      console.log(`   Clinical focus: "${context._clinicalFocus}"`);
+    }
 
     try {
       const response = await this.chat(chatMessages, {
         temperature: 0.1,
-        max_tokens: 2500, // ✅ increased for 8 findings + snippets
+        max_tokens: 2500,
       });
 
       const structuredResponse = this.parseStructuredResponse(
@@ -494,9 +970,9 @@ URL: ${trial.url || ""}
     }
   }
 
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   // PARSE: Extract structured response from LLM output
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   parseStructuredResponse(text, query, publications = [], clinicalTrials = []) {
     if (!text || typeof text !== "string") {
       return this.buildFallbackStructuredResponse(
@@ -518,7 +994,6 @@ URL: ${trial.url || ""}
         );
       }
 
-      // ✅ Repair truncated JSON before parsing
       let jsonStr = jsonMatch[0];
       jsonStr = this._repairTruncatedJson(jsonStr);
 
@@ -526,7 +1001,7 @@ URL: ${trial.url || ""}
       try {
         parsed = JSON.parse(jsonStr);
       } catch {
-        console.warn("⚠️ JSON parse failed, attempting field extraction");
+        console.warn("⚠️  JSON parse failed — attempting field extraction");
         parsed = this._extractFieldsFromText(text, publications);
       }
 
@@ -539,6 +1014,7 @@ URL: ${trial.url || ""}
         );
       }
 
+      // ── Normalize clinicalTrialsSummary ───────────────────────────────
       if (Array.isArray(parsed.clinicalTrialsSummary)) {
         parsed.clinicalTrialsSummary = parsed.clinicalTrialsSummary.join(". ");
       }
@@ -548,6 +1024,7 @@ URL: ${trial.url || ""}
           .trim();
       }
 
+      // ── Validate sourceSnippets ───────────────────────────────────────
       const hasGoodSnippets =
         Array.isArray(parsed.sourceSnippets) &&
         parsed.sourceSnippets.length > 0 &&
@@ -557,21 +1034,100 @@ URL: ${trial.url || ""}
         parsed.sourceSnippets = this.buildSourceSnippets(publications);
       }
 
+      // ── Enforce no duplicate citations in keyFindings ─────────────────
+      if (Array.isArray(parsed.keyFindings)) {
+        const citedPapers = new Set();
+        parsed.keyFindings = parsed.keyFindings.filter((finding) => {
+          if (typeof finding !== "string") return true;
+          const citationMatches = finding.match(/\[(\d+)\]/g);
+          if (!citationMatches || citationMatches.length === 0) return true;
+          const primaryCitation = citationMatches[citationMatches.length - 1];
+          if (citedPapers.has(primaryCitation)) {
+            console.log(`   🔄 Duplicate citation removed: ${primaryCitation}`);
+            return false;
+          }
+          citedPapers.add(primaryCitation);
+          return true;
+        });
+        console.log(
+          `   📝 keyFindings: ${parsed.keyFindings.length} unique citations`,
+        );
+      }
+
+      // ── Fix fallback conditionOverview ────────────────────────────────
+      const isFallbackOverview =
+        !parsed.conditionOverview ||
+        parsed.conditionOverview.startsWith("Research findings related to:") ||
+        parsed.conditionOverview.includes("publications analyzed");
+
+      if (isFallbackOverview && publications.length > 0) {
+        parsed.conditionOverview = this._buildConditionOverview(
+          query,
+          publications,
+        );
+        console.log("   ✅ conditionOverview rebuilt");
+      }
+
+      // ── Fix generic recommendations ───────────────────────────────────
+      const recsArr = this.ensureStringArray(parsed.recommendations);
+      const hasGenericRecs =
+        recsArr.length === 0 ||
+        recsArr.every(
+          (r) =>
+            r.startsWith("Review findings from") ||
+            r.startsWith("Consult with a healthcare") ||
+            r.length < 30,
+        );
+
+      if (hasGenericRecs && publications.length > 0) {
+        parsed.recommendations = this._buildRecommendations(publications);
+        console.log("   ✅ recommendations rebuilt");
+      }
+
+      // ── Fix generic trial summary ─────────────────────────────────────
+      const trialSummary = this.ensureString(parsed.clinicalTrialsSummary);
+      const isGenericTrialSummary =
+        !trialSummary ||
+        trialSummary.length < 30 ||
+        trialSummary.startsWith("Found ") ||
+        trialSummary.startsWith("Summarise") ||
+        trialSummary.startsWith("Summarize");
+
+      if (isGenericTrialSummary && clinicalTrials.length > 0) {
+        parsed.clinicalTrialsSummary = this._buildTrialSummary(clinicalTrials);
+        console.log("   ✅ clinicalTrialsSummary rebuilt");
+      }
+
+      // ── Fix safety section ────────────────────────────────────────────
+      // If LLM returned placeholder text or nothing useful
+      // fall back to pre-extracted safety hints
+      const safetyArr = this.ensureStringArray(parsed.safetyConsiderations);
+      const isSafetyPlaceholder =
+        safetyArr.length === 0 ||
+        safetyArr.every(
+          (s) =>
+            s.includes("Safety signal field") ||
+            s.includes("Format:") ||
+            s.includes("Only write No specific"),
+        );
+
+      const effectiveSafety = isSafetyPlaceholder
+        ? this._buildSafetyFromHints(publications)
+        : safetyArr;
+
       return {
         conditionOverview: this.ensureString(parsed.conditionOverview),
         keyFindings: this.ensureStringArray(parsed.keyFindings),
         researchInsights: this.ensureString(parsed.researchInsights),
         clinicalTrialsSummary: this.ensureString(parsed.clinicalTrialsSummary),
         recommendations: this.ensureStringArray(parsed.recommendations),
-        safetyConsiderations: this.ensureStringArray(
-          parsed.safetyConsiderations,
-        ),
+        safetyConsiderations: effectiveSafety,
         sourceSnippets: Array.isArray(parsed.sourceSnippets)
           ? parsed.sourceSnippets
           : [],
       };
     } catch (parseError) {
-      console.warn("⚠️ JSON parse failed completely, using fallback");
+      console.warn("⚠️  JSON parse failed completely — using fallback");
       return this.buildFallbackStructuredResponse(
         text,
         query,
@@ -581,16 +1137,199 @@ URL: ${trial.url || ""}
     }
   }
 
-  // ============================================================
-  // NEW: Repair truncated JSON from token limit cutoff
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
+  // HELPER: Build safety section from pre-extracted hints
+  // Called when LLM returns placeholder or empty safety section
+  // ════════════════════════════════════════════════════════════════════════
+  _buildSafetyFromHints(publications = []) {
+    const safetyFindings = [];
+
+    publications.slice(0, 8).forEach((pub, idx) => {
+      const hint = this._extractSafetyHint(pub.abstract || "", pub.title || "");
+      const titleLower = (pub.title || "").toLowerCase();
+      const paperNum = `[${idx + 1}]`;
+
+      if (hint && !hint.includes("No specific safety data extracted")) {
+        const tier = this._classifyEvidenceTier(
+          pub.title || "",
+          pub.abstract || "",
+        );
+        safetyFindings.push(
+          `The ${tier.split(" —")[0]} ${paperNum} reported ${hint} — "${(pub.title || "").substring(0, 60)}"`,
+        );
+        return;
+      }
+
+      // Title-level safety signals
+      if (
+        titleLower.includes("without increased risk") ||
+        titleLower.includes("no increased risk")
+      ) {
+        const specificRisk = titleLower.includes("pneumonia")
+          ? "pneumonia"
+          : titleLower.includes("bleeding")
+            ? "bleeding"
+            : titleLower.includes("toxicity")
+              ? "toxicity"
+              : "adverse events";
+        safetyFindings.push(
+          `${paperNum} reported no increased risk of ${specificRisk} — "${(pub.title || "").substring(0, 60)}"`,
+        );
+        return;
+      }
+
+      if (
+        titleLower.includes("well-tolerated") ||
+        titleLower.includes("manageable")
+      ) {
+        safetyFindings.push(
+          `${paperNum} described a well-tolerated safety profile — "${(pub.title || "").substring(0, 60)}"`,
+        );
+        return;
+      }
+
+      if (
+        titleLower.includes("safety and efficacy") ||
+        titleLower.includes("efficacy and safety")
+      ) {
+        // Broader search in abstract for any adverse event rate
+        const broadSafetyMatch =
+          (pub.abstract || "").match(
+            /(\d+\.?\d*\s*%)\s+of\s+patients?\s+(?:had|experienced|reported)\s+(?:grade|adverse|serious)/i,
+          ) ||
+          (pub.abstract || "").match(/grade\s*(?:3|≥3).*?(\d+\.?\d*\s*%)/i) ||
+          (pub.abstract || "").match(/adverse events?.*?(\d+\.?\d*\s*%)/i);
+
+        if (broadSafetyMatch) {
+          safetyFindings.push(
+            `${paperNum} reported adverse events in ${broadSafetyMatch[1]} — "${(pub.title || "").substring(0, 55)}"`,
+          );
+        } else {
+          safetyFindings.push(
+            `${paperNum} studied safety profile — consult full text of "${(pub.title || "").substring(0, 55)}" for adverse event rates`,
+          );
+        }
+      }
+    });
+
+    if (safetyFindings.length === 0) {
+      return ["No specific safety data was reported in the provided studies"];
+    }
+
+    return safetyFindings.slice(0, 4);
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // HELPER: Build condition overview from papers
+  // ════════════════════════════════════════════════════════════════════════
+  _buildConditionOverview(query, publications) {
+    const topPub = publications[0];
+    const tier = this._classifyEvidenceTier(
+      topPub?.title || "",
+      topPub?.abstract || "",
+    );
+    const tierShort = tier.split(" —")[0];
+    const outcome = this._extractOutcomeHint(topPub?.abstract || "");
+    const hasData = outcome !== "See abstract below";
+
+    let overview = `Current research on "${query}" includes ${publications.length} `;
+    overview += `publications ranging from ${tierShort}s to systematic reviews. `;
+
+    if (hasData && topPub) {
+      overview += `The highest-ranked study — "${(topPub.title || "").substring(0, 65)}..." — reported ${outcome}. `;
+    }
+
+    overview += `These findings represent the current evidence base for clinical decision-making.`;
+    return overview;
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // HELPER: Build evidence-based recommendations
+  // ════════════════════════════════════════════════════════════════════════
+  _buildRecommendations(publications) {
+    return publications.slice(0, 2).map((pub) => {
+      const outcome = this._extractOutcomeHint(pub.abstract || "");
+      const tier = this._classifyEvidenceTier(
+        pub.title || "",
+        pub.abstract || "",
+      );
+      const tierShort = tier.split(" —")[0];
+      const hasData = outcome !== "See abstract below";
+
+      if (hasData) {
+        return (
+          `Based on ${tierShort} evidence: ` +
+          `"${(pub.title || "").substring(0, 55)}..." reported ${outcome}. ` +
+          `Discuss applicability with your treating physician.`
+        );
+      }
+      return (
+        `${tierShort} evidence from ` +
+        `"${(pub.title || "").substring(0, 55)}..." — ` +
+        `consult your specialist for relevance to your specific case.`
+      );
+    });
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // HELPER: Build clinical trial summary
+  // ════════════════════════════════════════════════════════════════════════
+  _buildTrialSummary(clinicalTrials = []) {
+    if (clinicalTrials.length === 0) {
+      return "No relevant clinical trials were found for this query.";
+    }
+
+    const recruiting = clinicalTrials.filter((t) => t.status === "RECRUITING");
+    const completed = clinicalTrials.filter((t) => t.status === "COMPLETED");
+    const active = clinicalTrials.filter(
+      (t) => t.status === "ACTIVE_NOT_RECRUITING",
+    );
+
+    let summary = `${clinicalTrials.length} relevant clinical trial${clinicalTrials.length > 1 ? "s" : ""} identified. `;
+
+    if (recruiting.length > 0) {
+      summary += `${recruiting.length} actively recruiting: `;
+      summary +=
+        recruiting
+          .slice(0, 3)
+          .map((t) => {
+            const location = Array.isArray(t.locations)
+              ? t.locations[0]
+              : "N/A";
+            const phase = t.phase || "N/A";
+            const intervention =
+              Array.isArray(t.interventions) && t.interventions.length > 0
+                ? t.interventions[0]
+                : "investigational treatment";
+            const contact = t.contact?.email
+              ? ` (contact: ${t.contact.email})`
+              : "";
+            return `"${(t.title || "").substring(0, 55)}..." testing ${intervention} (${phase}, ${location})${contact}`;
+          })
+          .join("; ") + ". ";
+    }
+
+    if (active.length > 0) {
+      summary += `${active.length} active but not recruiting. `;
+    }
+
+    if (completed.length > 0) {
+      summary += `${completed.length} completed trial${completed.length > 1 ? "s" : ""} available for reference. `;
+    }
+
+    summary += `Check ClinicalTrials.gov for latest eligibility and enrollment status.`;
+    return summary;
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Repair truncated JSON from token limit cutoff
+  // ════════════════════════════════════════════════════════════════════════
   _repairTruncatedJson(jsonStr) {
     try {
       JSON.parse(jsonStr);
       return jsonStr;
     } catch {
       let repaired = jsonStr.trim();
-
       repaired = repaired.replace(/,?\s*"[^"]*$/, "");
       repaired = repaired.replace(/,\s*$/, "");
 
@@ -606,9 +1345,9 @@ URL: ${trial.url || ""}
     }
   }
 
-  // ============================================================
-  // NEW: Extract individual fields from badly broken JSON
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
+  // Extract individual fields from badly broken JSON
+  // ════════════════════════════════════════════════════════════════════════
   _extractFieldsFromText(text, publications = []) {
     try {
       const findingsMatch = text.match(/"keyFindings"\s*:\s*\[([\s\S]*?)\]/);
@@ -652,9 +1391,9 @@ URL: ${trial.url || ""}
     }
   }
 
-  // ============================================================
-  // HELPERS: Type safety
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
+  // TYPE SAFETY HELPERS
+  // ════════════════════════════════════════════════════════════════════════
   ensureString(value) {
     if (!value) return "";
     if (typeof value === "string") return value;
@@ -711,9 +1450,9 @@ URL: ${trial.url || ""}
     }));
   }
 
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   // FALLBACK: When LLM fails or returns bad data
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   buildFallbackStructuredResponse(
     rawText,
     query,
@@ -721,40 +1460,22 @@ URL: ${trial.url || ""}
     clinicalTrials = [],
   ) {
     const findings = publications.slice(0, 3).map((pub, idx) => {
-      const first = (pub.abstract || "").split(".")[0];
-      return `${first.substring(0, 140)}... [${idx + 1}]`;
+      const outcomeHint = this._extractOutcomeHint(pub.abstract || "");
+      const tier = this._classifyEvidenceTier(
+        pub.title || "",
+        pub.abstract || "",
+      );
+      const tierShort = tier.split(" —")[0];
+      const hasData = outcomeHint !== "See abstract below";
+
+      if (hasData) {
+        return `${tierShort}: "${(pub.title || "").substring(0, 70)}..." reported ${outcomeHint} [${idx + 1}]`;
+      }
+      return `${tierShort} — "${(pub.title || "").substring(0, 70)}..." [${idx + 1}]`;
     });
 
-    const recs = publications
-      .slice(0, 2)
-      .map(
-        (pub) =>
-          `Review findings from "${(pub.title || "").substring(0, 50)}..." with your healthcare provider`,
-      );
-
-    const safety =
-      publications.length > 0
-        ? [
-            `Review safety information in paper [1] before making any medical decisions`,
-          ]
-        : [
-            "Always consult qualified healthcare professionals before making medical decisions",
-          ];
-
-    const trialsText =
-      clinicalTrials.length > 0
-        ? `Found ${clinicalTrials.length} relevant clinical trial${clinicalTrials.length > 1 ? "s" : ""}. ` +
-          clinicalTrials
-            .slice(0, 2)
-            .map((t) => `${t.title} (${t.status})`)
-            .join(". ") +
-          "."
-        : "No relevant clinical trials found for this query.";
-
     return {
-      conditionOverview: query
-        ? `Research findings related to: ${query}. ${publications.length} publications analyzed.`
-        : "Medical research summary based on available publications.",
+      conditionOverview: this._buildConditionOverview(query, publications),
       keyFindings:
         findings.length > 0
           ? findings
@@ -768,12 +1489,14 @@ URL: ${trial.url || ""}
               `[${i + 1}] ${pub.title}: ${(pub.abstract || "").substring(0, 200)}...`,
           )
           .join("\n\n"),
-      clinicalTrialsSummary: trialsText,
+      clinicalTrialsSummary: this._buildTrialSummary(clinicalTrials),
       recommendations:
-        recs.length > 0
-          ? recs
-          : ["Consult with a healthcare professional for personalized advice."],
-      safetyConsiderations: safety,
+        this._buildRecommendations(publications).length > 0
+          ? this._buildRecommendations(publications)
+          : [
+              "Consult with a qualified healthcare professional for personalized advice.",
+            ],
+      safetyConsiderations: this._buildSafetyFromHints(publications),
       sourceSnippets: this.buildSourceSnippets(publications),
     };
   }
@@ -784,7 +1507,7 @@ URL: ${trial.url || ""}
     clinicalTrials = [],
     context = {},
   ) {
-    console.log("⚠️ Using fallback response");
+    console.log("⚠️  Using fallback response");
 
     const structured = this.buildFallbackStructuredResponse(
       "",
@@ -809,9 +1532,9 @@ URL: ${trial.url || ""}
     return { structuredResponse: structured, rawText, tokensUsed: 0 };
   }
 
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   // ENTITY EXTRACTION
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   async extractEntities(text) {
     if (!text || typeof text !== "string") {
       return {
@@ -863,9 +1586,9 @@ Only include entities explicitly mentioned. Empty arrays if none.`;
     };
   }
 
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   // DISEASE NORMALIZATION
-  // ============================================================
+  // ════════════════════════════════════════════════════════════════════════
   async normalizeDisease(disease) {
     if (!disease || typeof disease !== "string") return disease;
 

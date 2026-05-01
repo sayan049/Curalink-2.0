@@ -3,10 +3,9 @@
 // ============================================================
 // Changes from original:
 //   Step 6: Publications use diversifyResults(items, size, intentType)
-//           Trials use diversifyTrials(items, size) — separate method
-//           because trials don't have semantic scores from embeddingService
-//
-// Everything else is identical to original.
+//           Trials use diversifyTrials(items, size)
+//   Step 6b: NEW — Sort final 8 by relevanceScore so strongest
+//            papers reach LLM first (token budget cuts from bottom)
 // ============================================================
 
 import pubmedService from "./pubmedService.js";
@@ -106,10 +105,6 @@ class HybridSearchService {
       console.log(`   Unique Publications: ${uniquePublications.length}`);
 
       // ── Step 5: Rank ─────────────────────────────────────────────────────
-      // rankingService.rankPublications() now internally calls
-      // embeddingService.batchScore() on all publications before scoring.
-      // Each paper gets _semanticScore, _usefulnessScore, _solutionScore,
-      // _safetyScore attached which feed into the composite score formula.
       const rankedPublications = rankingService.rankPublications(
         uniquePublications,
         query,
@@ -129,26 +124,28 @@ class HybridSearchService {
       const finalSize = parseInt(process.env.FINAL_RESULTS_SIZE) || 8;
 
       // ── Step 6: Final selection ───────────────────────────────────────────
-      //
-      // PUBLICATIONS — usefulness-aware selection
-      //   diversifyResults() receives intentType and uses semantic scores
-      //   to guarantee solution-containing papers and safety papers (when
-      //   relevant) appear in the final 8.
-      //
-      // TRIALS — simple title-dedup selection
-      //   diversifyTrials() uses original ranked-order + title dedup.
-      //   Trials don't have semantic scores (embeddingService only runs
-      //   on publications) so plain dedup is correct here.
-      //
       const diversifiedPublications = rankingService.diversifyResults(
         rankedPublications.slice(0, 40),
         finalSize,
-        intentType,                    // ← new: enables usefulness-aware selection
+        intentType,
+      );
+
+      // ── Step 6b: Sort final 8 so strongest papers reach LLM first ────────
+      // The LLM token budget for 8B models limits input to 6 papers.
+      // Without sorting, a high-quality RCT at position [8] gets cut off
+      // and only meta-analyses at [1]-[6] reach the LLM.
+      // With sorting by relevanceScore, the strongest-evidence paper
+      // (regardless of what diversifyResults placed it at) is always
+      // in the first 6 positions that the LLM will process.
+      // This ensures queries like "can I take vitamin D" send the
+      // NSCLC-specific RCT to the LLM instead of generic reviews.
+      const sortedPublications = [...diversifiedPublications].sort(
+        (a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0)
       );
 
       const diversifiedTrials = rankingService.diversifyTrials(
         rankedTrials.slice(0, 30),
-        finalSize,                     // ← uses new dedicated trial method
+        finalSize,
       );
 
       // ── Step 7: Reorder trial locations ─────────────────────────────────
@@ -160,7 +157,7 @@ class HybridSearchService {
       const processingTime = Date.now() - startTime;
 
       console.log(`\n✅ Search Complete in ${processingTime}ms`);
-      console.log(`   Top Publications: ${diversifiedPublications.length}`);
+      console.log(`   Top Publications: ${sortedPublications.length}`);
       console.log(`   Top Trials:       ${reorderedTrials.length}`);
 
       // ── Step 8: Locality stats for chatController ───────────────────────
@@ -168,7 +165,7 @@ class HybridSearchService {
       const fallbackTrialCount = reorderedTrials.filter((t) => t.matchSource === "global_fallback").length;
 
       return {
-        publications    : diversifiedPublications,
+        publications    : sortedPublications,
         clinicalTrials  : reorderedTrials,
         expandedQuery   : openalexQuery,
         intent          : intent?.type,
@@ -177,7 +174,7 @@ class HybridSearchService {
         metadata: {
           totalPublicationsFound : allPublications.length,
           totalTrialsFound       : clinicalTrials.length,
-          publicationsReturned   : diversifiedPublications.length,
+          publicationsReturned   : sortedPublications.length,
           trialsReturned         : reorderedTrials.length,
           processingTime,
           sources: {
@@ -337,7 +334,7 @@ class HybridSearchService {
           return false;
         }
       }
-
+    
       seen.set(normalizedTitle, pub);
       return true;
     });
